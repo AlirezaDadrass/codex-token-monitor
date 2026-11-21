@@ -32,7 +32,7 @@ func run(ctx context.Context, args []string) error {
 	if len(args) == 1 {
 		switch args[0] {
 		case "--version":
-			fmt.Println("token-monitor 0.1.0")
+			fmt.Println("token-monitor " + monitor.Version)
 			return nil
 		case "--help", "-h", "help":
 			fmt.Println("Usage: token-monitor <install|init|collect|watch|report|mcp|hub> [flags]\nUse token-monitor COMMAND --help for command options.")

@@ -22,7 +22,6 @@ type Config struct {
 	HubURL             string `json:"hub_url,omitempty"`
 	PublicURL          string `json:"public_url,omitempty"`
 	TokenFile          string `json:"token_file,omitempty"`
-	ExpectedMachines   int    `json:"expected_machines"`
 	IntervalSeconds    int    `json:"interval_seconds"`
 	RetentionDays      int    `json:"retention_days"`
 	LimitID            string `json:"limit_id"`
@@ -60,7 +59,7 @@ func NewConfig(name string) (Config, error) {
 	return Config{
 		MachineID: hex.EncodeToString(id[:]), MachineName: name, Account: "personal",
 		CodexHome: codexHome, DataDir: filepath.Join(dataRoot, "codex-token-monitor", "data"),
-		ExpectedMachines: 3, IntervalSeconds: 60, RetentionDays: 14, LimitID: "codex",
+		IntervalSeconds: 60, RetentionDays: 14, LimitID: "codex",
 	}, nil
 }
 
@@ -78,9 +77,9 @@ func LoadConfig(path string) (Config, error) {
 			return c, errors.New("identifiers must be 1..200 characters")
 		}
 	}
-	if c.ExpectedMachines < 1 || c.ExpectedMachines > 100 || c.IntervalSeconds < 5 ||
+	if c.IntervalSeconds < 5 ||
 		c.IntervalSeconds > 86400 || c.RetentionDays < 8 || c.RetentionDays > 365 {
-		return c, errors.New("invalid expected_machines, interval_seconds, or retention_days")
+		return c, errors.New("invalid interval_seconds or retention_days")
 	}
 	for _, p := range []*string{&c.CodexHome, &c.DataDir, &c.TokenFile} {
 		if *p == "" {

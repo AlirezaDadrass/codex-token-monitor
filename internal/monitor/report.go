@@ -39,7 +39,6 @@ type Report struct {
 	WindowEnd         time.Time       `json:"window_end"`
 	RankingMetric     string          `json:"ranking_metric"`
 	WeeklyQuota       *QuotaReport    `json:"account_weekly_quota"`
-	ExpectedMachines  int             `json:"expected_machines"`
 	ReportingMachines int             `json:"reporting_machines"`
 	FreshMachines     int             `json:"fresh_machines"`
 	CoverageComplete  bool            `json:"coverage_complete"`
@@ -60,7 +59,7 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 	}
 	r := Report{Account: c.Account, GeneratedAt: now, Scope: "local", WindowSource: "rolling_7_days",
 		WindowStart: now.Add(-7 * 24 * time.Hour), WindowEnd: now, RankingMetric: metric,
-		ExpectedMachines: c.ExpectedMachines, Machines: []MachineReport{}, Warnings: []string{}}
+		Machines: []MachineReport{}, Warnings: []string{}}
 	byDevice := map[string]Snapshot{}
 	for _, s := range snapshots {
 		if s.Account != c.Account {
@@ -192,7 +191,9 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 		r.Daily = append(r.Daily, *day)
 	}
 	sort.Slice(r.Daily, func(i, j int) bool { return r.Daily[i].Date < r.Daily[j].Date })
-	r.CoverageComplete = r.ReportingMachines == c.ExpectedMachines && r.FreshMachines == c.ExpectedMachines && r.ConflictingEvents == 0
+	// Coverage concerns the registered devices' data, not an assumed fleet size.
+	// The monitor cannot know about computers that have never uploaded a snapshot.
+	r.CoverageComplete = r.ReportingMachines > 0 && r.FreshMachines == r.ReportingMachines && r.ConflictingEvents == 0
 	for _, s := range devices {
 		d := s.Diagnostics
 		if s.HistorySince.After(r.WindowStart) || d.Files == 0 || d.MalformedLines > 0 || d.OversizedLines > 0 ||
@@ -201,7 +202,7 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 		}
 	}
 	if !r.CoverageComplete {
-		r.Warnings = append(r.Warnings, "Coverage is incomplete: check device freshness, expected count, and collection diagnostics. Shares cover observed local logs only.")
+		r.Warnings = append(r.Warnings, "Coverage is incomplete: check registered device freshness, history, and collection diagnostics. Shares cover observed local logs only.")
 	}
 	if r.ConflictingEvents > 0 {
 		r.Warnings = append(r.Warnings, "Some events appear on multiple computers (copied/synced logs). They are counted once in totals and left unattributed.")

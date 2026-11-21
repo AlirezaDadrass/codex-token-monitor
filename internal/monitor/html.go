@@ -37,7 +37,6 @@ type HTMLArtifact struct {
 	DisplayMarkdown   string    `json:"display_markdown"`
 	GeneratedAt       time.Time `json:"generated_at"`
 	ReportingMachines int       `json:"reporting_machines"`
-	ExpectedMachines  int       `json:"expected_machines"`
 	LLMCalls          int       `json:"llm_calls"`
 }
 
@@ -61,7 +60,7 @@ func WriteHTMLReport(c Config, report Report, output string) (HTMLArtifact, erro
 		return HTMLArtifact{}, err
 	}
 	return HTMLArtifact{Path: path, DisplayMarkdown: "[مشاهدهٔ گزارش مصرف کدکس](<" + path + ">)", GeneratedAt: report.GeneratedAt,
-		ReportingMachines: report.ReportingMachines, ExpectedMachines: report.ExpectedMachines, LLMCalls: 0}, nil
+		ReportingMachines: report.ReportingMachines, LLMCalls: 0}, nil
 }
 
 func RenderHTML(w io.Writer, report Report) error {

@@ -2,6 +2,8 @@ package monitor
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -156,5 +158,52 @@ func TestReachedAllowanceDoesNotEstimatePaidUsage(t *testing.T) {
 		if m.EstimatedQuotaPoints != nil {
 			t.Fatal("estimated allowance from possible credit-funded usage")
 		}
+	}
+}
+
+func TestRegisteredDeviceCountDoesNotLimitCoverageOrEstimates(t *testing.T) {
+	for _, count := range []int{1, 2, 4, 101} {
+		t.Run(fmt.Sprint(count), func(t *testing.T) {
+			c := testConfig(t)
+			now := time.Now().UTC()
+			devices := make([]Snapshot, 0, count)
+			for i := 0; i < count; i++ {
+				devices = append(devices, sampleSnapshot(fmt.Sprintf("device-%d", i), 100, now))
+			}
+			r, err := BuildReport(c, devices, now, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r.ReportingMachines != count || len(r.Machines) != count || !r.CoverageComplete || r.Totals.Total != int64(count)*100 {
+				t.Fatalf("device count changed coverage/totals: %+v", r)
+			}
+			var estimated float64
+			for _, m := range r.Machines {
+				if m.EstimatedQuotaPoints == nil {
+					t.Fatal("arbitrary device count prevented quota estimate")
+				}
+				estimated += *m.EstimatedQuotaPoints
+			}
+			if estimated < 59.999999 || estimated > 60.000001 {
+				t.Fatalf("estimates do not preserve shared quota: %v", estimated)
+			}
+			body, err := json.Marshal(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(body), "expected_machines") {
+				t.Fatal("report still exposes an assumed fleet size")
+			}
+		})
+	}
+}
+
+func TestNoRegisteredDevicesDoesNotImplyCompleteCoverage(t *testing.T) {
+	r, err := BuildReport(testConfig(t), nil, time.Now().UTC(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.ReportingMachines != 0 || r.CoverageComplete {
+		t.Fatal("empty report claims full observed coverage")
 	}
 }

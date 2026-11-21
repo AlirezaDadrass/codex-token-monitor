@@ -4,7 +4,7 @@ set -euo pipefail
 set +x
 
 repo="AlirezaDadrass/codex-token-monitor"
-version="${TOKEN_MONITOR_VERSION:-v0.1.0}"
+version="${TOKEN_MONITOR_VERSION:-v0.1.1}"
 binary=""
 dry_run=false
 stage_dir=""
@@ -17,7 +17,7 @@ while (($#)); do
     --binary) [[ $# -ge 2 ]] || die "--binary requires a path"; binary="$2"; shift 2 ;;
     --version) [[ $# -ge 2 ]] || die "--version requires a tag"; version="$2"; shift 2 ;;
     --dry-run) dry_run=true; shift ;;
-    --help|-h) printf '%s\n' 'Usage: sudo bash scripts/install-server.sh [--binary /path/token-monitor] [--version v0.1.0] [--dry-run]'; exit 0 ;;
+    --help|-h) printf '%s\n' 'Usage: sudo bash scripts/install-server.sh [--binary /path/token-monitor] [--version v0.1.1] [--dry-run]'; exit 0 ;;
     *) die "Unknown option: $1" ;;
   esac
 done

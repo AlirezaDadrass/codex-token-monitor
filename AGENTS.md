@@ -16,6 +16,7 @@ After installation, run an authenticated connection check and generate an HTML r
 - Keep collection incremental and read-only with respect to Codex's own files. Never read/copy Codex authentication files to discover the hub token.
 - Before changing collectors or reports, read the affected implementation and tests. Use direct source reads for known files; broader discovery is only needed for a change crossing modules.
 - Keep account quota observations separate from per-device token counts. Never describe raw token proportions as exact OpenAI quota attribution.
+- Discover device counts from uploaded snapshots. Do not add a fixed maximum, expected fleet size, or minimum number of devices to installation, reporting, or coverage checks. Coverage concerns the registered devices' data only.
 - Preserve duplicate-event handling, account separation, private token files, authenticated HTTP/MCP routes, and signed report downloads.
 - Run `go test -race ./...`, `go vet ./...`, and a native build for behavior changes. For shell installers also run `bash -n scripts/*.sh` and the dry-run tests. Do not test server installation by changing an unrelated live host.
 - Never commit `.local/`, `bin/`, `dist/`, configs, hub tokens, TLS keys, session logs, or generated reports based on personal data. Public examples must use placeholders or clearly labeled synthetic data.

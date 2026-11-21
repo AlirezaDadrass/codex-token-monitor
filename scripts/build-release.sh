@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build portable native binaries with the host Go toolchain. No containers.
 set -euo pipefail
-version="${1:-v0.1.0}"
-[[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { printf '%s\n' 'Use a version such as v0.1.0' >&2; exit 1; }
+version="${1:-v0.1.1}"
+[[ "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { printf '%s\n' 'Use a version such as v0.1.1' >&2; exit 1; }
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
 for command in go tar zip sha256sum; do command -v "$command" >/dev/null || { printf 'Missing %s\n' "$command" >&2; exit 1; }; done

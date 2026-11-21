@@ -28,7 +28,7 @@ func TestHTMLIsStandaloneEscapesNamesAndContainsData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{`</script><script>alert`, `src="http`, `href="http`, "ZgotmplZ"} {
+	for _, forbidden := range []string{`</script><script>alert`, `src="http`, `href="http`, "ZgotmplZ", "expected_machines", "ExpectedMachines", "دستگاه هنوز در این گزارش حضور ندارند"} {
 		if bytes.Contains(body, []byte(forbidden)) {
 			t.Fatalf("unsafe or non-standalone report: %s", forbidden)
 		}

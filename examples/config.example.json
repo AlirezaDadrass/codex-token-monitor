@@ -6,7 +6,6 @@
   "data_dir": "./data",
   "hub_url": "http://127.0.0.1:8787",
   "token_file": "./hub-token",
-  "expected_machines": 3,
   "interval_seconds": 60,
   "retention_days": 14,
   "limit_id": "codex"

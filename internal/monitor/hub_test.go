@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -192,6 +193,31 @@ func TestReportUsesConfiguredPublicAddressBehindProxy(t *testing.T) {
 	}
 	if !strings.HasPrefix(artifact.URL, c.PublicURL+"/reports/") {
 		t.Fatalf("report link used internal HTTP origin: %s", artifact.URL)
+	}
+}
+
+func TestHubAcceptsMoreThanOneHundredDevices(t *testing.T) {
+	c := testConfig(t)
+	server := httptest.NewServer(HubHandler(c, testToken))
+	defer server.Close()
+	c.HubURL = server.URL
+	t.Setenv("TOKEN_MONITOR_HUB_TOKEN", testToken)
+	now := time.Now().UTC()
+	for i := 0; i < 101; i++ {
+		var response map[string]bool
+		if err := hubRequest(context.Background(), c, http.MethodPost, "/v1/snapshots", sampleSnapshot(fmt.Sprintf("pc-%d", i), 1, now), &response); err != nil {
+			t.Fatalf("device %d rejected: %v", i, err)
+		}
+		if !response["accepted"] {
+			t.Fatalf("device %d was not accepted", i)
+		}
+	}
+	var report Report
+	if err := hubRequest(context.Background(), c, http.MethodGet, "/v1/report", nil, &report); err != nil {
+		t.Fatal(err)
+	}
+	if report.ReportingMachines != 101 || report.Totals.Total != 101 || !report.CoverageComplete {
+		t.Fatalf("hub restricts device count or misreports data: %+v", report)
 	}
 }
 

@@ -13,7 +13,7 @@ func NewMCPServer(c Config, hubMode bool) *mcp.Server {
 }
 
 func newMCPServer(c Config, hubMode bool, origin string) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "codex-token-monitor", Version: "0.1.0"}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "codex-token-monitor", Version: Version}, nil)
 	type reportArgs struct {
 		Metric  string `json:"metric,omitempty" jsonschema:"Ranking metric: total_tokens (default) or non_cached_tokens. Cached input is included in total_tokens."`
 		Refresh *bool  `json:"refresh,omitempty" jsonschema:"Refresh local logs and push to hub first (default true). Hub MCP reads the latest uploaded snapshots."`
@@ -50,22 +50,21 @@ func newMCPServer(c Config, hubMode bool, origin string) *mcp.Server {
 		return nil, r, err
 	})
 	type status struct {
-		Mode             string    `json:"mode"`
-		MachineID        string    `json:"machine_id"`
-		MachineName      string    `json:"machine_name"`
-		Account          string    `json:"account"`
-		ExpectedMachines int       `json:"expected_machines"`
-		IntervalSeconds  int       `json:"interval_seconds"`
-		HubConfigured    bool      `json:"hub_configured"`
-		Now              time.Time `json:"now"`
+		Mode            string    `json:"mode"`
+		MachineID       string    `json:"machine_id"`
+		MachineName     string    `json:"machine_name"`
+		Account         string    `json:"account"`
+		IntervalSeconds int       `json:"interval_seconds"`
+		HubConfigured   bool      `json:"hub_configured"`
+		Now             time.Time `json:"now"`
 	}
-	mcp.AddTool(s, &mcp.Tool{Name: "get_monitor_status", Description: "Read this monitor's device identity, account group, expected device count, and mode. Does not reveal credentials or chat contents.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)}},
+	mcp.AddTool(s, &mcp.Tool{Name: "get_monitor_status", Description: "Read this monitor's device identity, account group, and mode. Device count is unrestricted. Does not reveal credentials or chat contents.", Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)}},
 		func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, status, error) {
 			mode := "local"
 			if hubMode {
 				mode = "hub"
 			}
-			return nil, status{mode, c.MachineID, c.MachineName, c.Account, c.ExpectedMachines, c.IntervalSeconds, c.HubURL != "", time.Now().UTC()}, nil
+			return nil, status{mode, c.MachineID, c.MachineName, c.Account, c.IntervalSeconds, c.HubURL != "", time.Now().UTC()}, nil
 		})
 	if !hubMode {
 		type syncResult struct {
