@@ -1,0 +1,7 @@
+# The collector must still run on every computer.
+# Set TOKEN_MONITOR_HUB_TOKEN in the environment that launches Codex.
+[mcp_servers.token-monitor]
+url = "http://127.0.0.1:8787/mcp"
+bearer_token_env_var = "TOKEN_MONITOR_HUB_TOKEN"
+tool_timeout_sec = 60
+enabled_tools = ["generate_usage_report", "get_monitor_status"]

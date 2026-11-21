@@ -1,0 +1,7 @@
+# Replace the two absolute paths with this computer's executable and config.
+[mcp_servers.token-monitor]
+command = "/absolute/path/token-monitor"
+args = ["mcp", "--config", "/absolute/path/config.json"]
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+enabled_tools = ["generate_usage_report", "get_monitor_status"]

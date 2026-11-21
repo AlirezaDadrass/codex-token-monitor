@@ -1,0 +1,12 @@
+# Optional user service for the computer hosting the shared hub. Replace paths.
+[Unit]
+Description=Codex Token Monitor shared hub and MCP
+After=network-online.target
+
+[Service]
+ExecStart=/absolute/path/token-monitor hub --config /absolute/path/config.json
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

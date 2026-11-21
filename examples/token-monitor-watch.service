@@ -1,0 +1,14 @@
+# Copy to ~/.config/systemd/user/token-monitor-watch.service and replace paths.
+# Then: systemctl --user daemon-reload
+#       systemctl --user enable --now token-monitor-watch
+[Unit]
+Description=Collect Codex token usage and sync to Token Monitor
+After=network-online.target
+
+[Service]
+ExecStart=/absolute/path/token-monitor watch --config /absolute/path/config.json
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

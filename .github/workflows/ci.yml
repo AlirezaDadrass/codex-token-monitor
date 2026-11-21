@@ -1,0 +1,20 @@
+name: Native Go checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race ./...
+      - run: go vet ./...
+      - run: go build -trimpath -o bin/token-monitor ./cmd/token-monitor
+      - run: bash -n scripts/install-server.sh scripts/build-release.sh
