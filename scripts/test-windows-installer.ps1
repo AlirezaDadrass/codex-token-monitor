@@ -121,6 +121,7 @@ try {
         $command = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String(($clientTask.Actions.Arguments -split ' ')[-1]))
         Assert-InstallerTest (-not $command.Contains($fakeKey)) 'Client task contains a credential.'
         Assert-InstallerTest ($command.Contains('Remove-Item Env:TOKEN_MONITOR_HUB_TOKEN')) 'Client task can inherit a stale token override.'
+        Assert-InstallerTest ($command.Contains('--parent-pid $PID')) 'Collector can outlive its task launcher.'
         $registeredSnapshots = @(Get-ChildItem -LiteralPath (Join-Path $serverRoot 'data/hub') -Filter '*.json' | ForEach-Object { Get-Content -LiteralPath $_.FullName -Encoding UTF8 -Raw | ConvertFrom-Json } | Where-Object { $_.machine_id -eq $profile.machine_id })
         Assert-InstallerTest ($registeredSnapshots.Count -eq 1) 'Installation checked health but did not upload the device snapshot.'
         $registered = Get-Content -LiteralPath $env:TOKEN_MONITOR_TEST_REGISTRATION -Encoding UTF8 -Raw | ConvertFrom-Json
@@ -160,7 +161,12 @@ try {
     if ($clientTaskName -and (Get-ScheduledTask -TaskName $clientTaskName -ErrorAction SilentlyContinue)) {
         Stop-ScheduledTask -TaskName $clientTaskName -ErrorAction SilentlyContinue
         Unregister-ScheduledTask -TaskName $clientTaskName -Confirm:$false
-        Start-Sleep -Milliseconds 500
+        for ($attempt = 0; $attempt -lt 30; $attempt++) {
+            $runningCollectors = @(Get-CimInstance Win32_Process -Filter "Name = 'token-monitor.exe'" | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($clientRoot, [StringComparison]::OrdinalIgnoreCase) })
+            if ($runningCollectors.Count -eq 0) { break }
+            Start-Sleep -Milliseconds 200
+        }
+        Assert-InstallerTest ($runningCollectors.Count -eq 0) 'Stopping the collector task left an orphan native process.'
     }
     if ($Integration -and (Get-ScheduledTask -TaskName $testTask -ErrorAction SilentlyContinue)) {
         Stop-ScheduledTask -TaskName $testTask -ErrorAction SilentlyContinue

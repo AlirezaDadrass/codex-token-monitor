@@ -49,6 +49,7 @@ func run(ctx context.Context, args []string) error {
 	var metric, listen, cert, key, output *string
 	var htmlReport *bool
 	var noRefresh *bool
+	var parentPID *int
 	switch command {
 	case "init", "install":
 		name = f.String("name", "", "display name for this computer")
@@ -73,7 +74,9 @@ func run(ctx context.Context, args []string) error {
 		listen = f.String("listen", "127.0.0.1:8787", "HTTP listen address")
 		cert = f.String("tls-cert", "", "optional TLS certificate")
 		key = f.String("tls-key", "", "optional TLS private key")
-	case "collect", "watch", "mcp":
+	case "watch":
+		parentPID = f.Int("parent-pid", 0, "Windows hidden-launcher process to follow; exit when it stops")
+	case "collect", "mcp":
 	default:
 		return fmt.Errorf("unknown command %q", command)
 	}
@@ -113,6 +116,14 @@ func run(ctx context.Context, args []string) error {
 		}
 		return printJSON(map[string]any{"machine": s.MachineName, "events": len(s.Events), "collected_at": s.CollectedAt, "diagnostics": s.Diagnostics, "synced_to_hub": c.HubURL != ""})
 	case "watch":
+		if *parentPID != 0 {
+			child, cancel := context.WithCancel(ctx)
+			defer cancel()
+			if err := monitorParent(child, *parentPID, cancel); err != nil {
+				return err
+			}
+			return watch(child, c)
+		}
 		return watch(ctx, c)
 	case "report":
 		if *output != "" {

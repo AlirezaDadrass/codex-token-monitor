@@ -159,7 +159,7 @@ function Register-ClientCollectorTask([string]$Executable, [string]$ConfigPath, 
     # stale inherited token override. No credential is in the task arguments.
     $quotedExe = "'" + $Executable.Replace("'", "''") + "'"
     $quotedConfig = "'" + $ConfigPath.Replace("'", "''") + "'"
-    $launch = '$ErrorActionPreference = ''Stop''; Remove-Item Env:TOKEN_MONITOR_HUB_TOKEN -ErrorAction SilentlyContinue; & ' + $quotedExe + ' watch --config ' + $quotedConfig + '; exit $LASTEXITCODE'
+    $launch = '$ErrorActionPreference = ''Stop''; Remove-Item Env:TOKEN_MONITOR_HUB_TOKEN -ErrorAction SilentlyContinue; & ' + $quotedExe + ' watch --parent-pid $PID --config ' + $quotedConfig + '; exit $LASTEXITCODE'
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($launch))
     $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
     $action = New-ScheduledTaskAction -Execute $powershell -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' + $encoded) -WorkingDirectory $InstallRoot

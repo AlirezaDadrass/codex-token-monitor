@@ -285,7 +285,8 @@ func TestStdioMCPBinary(t *testing.T) {
 		t.Fatalf("build: %v %s", err, b)
 	}
 	c := testConfig(t)
-	hub := httptest.NewServer(HubHandler(testConfig(t), testToken))
+	hubConfig := testConfig(t)
+	hub := httptest.NewServer(HubHandler(hubConfig, testToken))
 	defer hub.Close()
 	c.HubURL = hub.URL
 	t.Setenv("TOKEN_MONITOR_HUB_TOKEN", testToken)
@@ -308,6 +309,22 @@ func TestStdioMCPBinary(t *testing.T) {
 	}
 	if len(tools.Tools) != 4 {
 		t.Fatalf("wrong tools: %+v", tools.Tools)
+	}
+	// Merely starting the local MCP must upload usage. No usage-report or
+	// sync tool has been called, and no external collect command is running.
+	var automatic Report
+	for attempt := 0; attempt < 100; attempt++ {
+		automatic, err = GetReport(ctx, hubConfig, true, "", false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if automatic.ReportingMachines == 1 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if automatic.Totals != a || automatic.ReportingMachines != 1 || automatic.Machines[0].ID != c.MachineID {
+		t.Fatalf("local MCP did not upload automatically: %+v", automatic)
 	}
 	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "get_weekly_usage", Arguments: map[string]any{}})
 	if err != nil || result.IsError {
