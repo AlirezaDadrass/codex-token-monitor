@@ -269,7 +269,8 @@ function Install-WindowsMonitor {
         if ($serverMode) {
             $listen = $ListenAddress + ':' + $Port
             if ($ListenAddress.Contains(':')) { $listen = '[' + $ListenAddress + ']:' + $Port }
-            $hubArguments = @('hub', '--config', $configPath, '--listen', $listen)
+            $serverProfile = Get-Content -LiteralPath $configPath -Encoding UTF8 -Raw | ConvertFrom-Json
+            $hubArguments = @('hub', '--config', $configPath, '--token-file', $serverProfile.token_file, '--listen', $listen)
             if ($TlsCertificate) {
                 $certTarget = Join-Path $configDirectory 'server.crt'; $keyTarget = Join-Path $configDirectory 'server.key'
                 Copy-Item -LiteralPath $TlsCertificate -Destination $certTarget

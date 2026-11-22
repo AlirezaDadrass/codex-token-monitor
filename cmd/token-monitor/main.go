@@ -69,6 +69,7 @@ func run(ctx context.Context, args []string) error {
 		htmlReport = f.Bool("html", false, "generate an offline HTML report without an LLM")
 		output = f.String("output", "", "HTML output path (default: reports directory)")
 	case "hub":
+		tokenFile = f.String("token-file", "", "use this exact private token file instead of an environment override")
 		listen = f.String("listen", "127.0.0.1:8787", "HTTP listen address")
 		cert = f.String("tls-cert", "", "optional TLS certificate")
 		key = f.String("tls-key", "", "optional TLS private key")
@@ -136,6 +137,9 @@ func run(ctx context.Context, args []string) error {
 		return monitor.NewMCPServer(c, false).Run(ctx, &mcp.StdioTransport{})
 	case "hub":
 		token, err := c.Token()
+		if *tokenFile != "" {
+			token, err = monitor.ReadTokenFile(*tokenFile)
+		}
 		if err != nil {
 			return err
 		}

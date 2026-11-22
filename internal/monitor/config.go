@@ -132,6 +132,18 @@ func (c Config) Token() (string, error) {
 	return token, nil
 }
 
+func ReadTokenFile(path string) (string, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	token := strings.TrimSpace(string(b))
+	if len(token) < 32 || len(strings.Fields(token)) != 1 {
+		return "", errors.New("token file must contain 32+ characters without whitespace")
+	}
+	return token, nil
+}
+
 func atomicJSON(path string, value any) error {
 	b, err := json.Marshal(value)
 	if err != nil {

@@ -77,12 +77,13 @@ try {
         Install-WindowsMonitor -Mode Server -Version 'v0.1.2' -Architecture amd64 -Name 'مرکز تست' -PublicUrl $hubAddress -ListenAddress '127.0.0.1' -Port $testPort -Token $secureKey -InstallRoot $serverRoot -TaskName $testTask -ArchivePath $archive -ChecksumsPath $manifest -NonInteractive
         $serverInstalled = $true
         $tokenBytes = [IO.File]::ReadAllBytes((Join-Path $serverRoot 'config/hub-token'))
-        Assert-InstallerTest (([Text.Encoding]::UTF8.GetString($tokenBytes)).Trim() -eq $fakeKey) 'The token changed in native stdin transmission.'
+        Assert-InstallerTest (([Text.Encoding]::UTF8.GetString($tokenBytes)).Trim() -ceq $fakeKey) 'The token changed in native stdin transmission.'
         Add-Type -AssemblyName System.Net.Http
         $httpHandler = New-Object Net.Http.HttpClientHandler
         $httpHandler.UseProxy = $false
         $httpClient = New-Object Net.Http.HttpClient($httpHandler)
         $httpClient.DefaultRequestHeaders.Authorization = New-Object Net.Http.Headers.AuthenticationHeaderValue('Bearer', $fakeKey)
+        Write-Output ('Machine token environment override present: ' + [bool][Environment]::GetEnvironmentVariable('TOKEN_MONITOR_HUB_TOKEN', 'Machine'))
         $healthy = $false
         $lastHealthError = ''
         for ($attempt = 0; $attempt -lt 20; $attempt++) {
