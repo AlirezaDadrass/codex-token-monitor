@@ -66,8 +66,8 @@ func run(ctx context.Context, args []string) error {
 	case "report":
 		metric = f.String("metric", "total_tokens", "total_tokens or non_cached_tokens")
 		noRefresh = f.Bool("no-refresh", false, "read cached counters without scanning local logs")
-		htmlReport = f.Bool("html", false, "generate an offline HTML report without an LLM")
-		output = f.String("output", "", "HTML output path (default: reports directory)")
+		htmlReport = f.Bool("html", false, "generate an HTML report on the hub and return its link")
+		output = f.String("output", "", "unsupported: reports are hosted on the hub")
 	case "hub":
 		tokenFile = f.String("token-file", "", "use this exact private token file instead of an environment override")
 		listen = f.String("listen", "127.0.0.1:8787", "HTTP listen address")
@@ -115,16 +115,19 @@ func run(ctx context.Context, args []string) error {
 	case "watch":
 		return watch(ctx, c)
 	case "report":
-		r, err := monitor.GetReport(ctx, c, false, *metric, !*noRefresh)
-		if err != nil {
-			return err
+		if *output != "" {
+			return errors.New("local HTML output is no longer supported; use report --html for a hub link")
 		}
-		if *htmlReport || *output != "" {
-			artifact, err := monitor.WriteHTMLReport(c, r, *output)
+		if *htmlReport {
+			artifact, err := monitor.GenerateReport(ctx, c, *metric, !*noRefresh)
 			if err != nil {
 				return err
 			}
 			return printJSON(artifact)
+		}
+		r, err := monitor.GetReport(ctx, c, false, *metric, !*noRefresh)
+		if err != nil {
+			return err
 		}
 		return printJSON(r)
 	case "mcp":

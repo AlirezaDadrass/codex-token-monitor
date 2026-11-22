@@ -51,12 +51,7 @@ func HubHandler(c Config, token string) http.Handler {
 		writeJSON(w, map[string]bool{"accepted": accepted})
 	})
 	mux.HandleFunc("GET /v1/report", func(w http.ResponseWriter, r *http.Request) {
-		snapshots, err := store.List(c.Account)
-		if err != nil {
-			http.Error(w, "cannot read snapshots", 500)
-			return
-		}
-		report, err := BuildReport(c, snapshots, time.Now().UTC(), r.URL.Query().Get("metric"))
+		report, err := GetReport(r.Context(), c, true, r.URL.Query().Get("metric"), false)
 		if err != nil {
 			http.Error(w, err.Error(), 400)
 			return
@@ -64,16 +59,16 @@ func HubHandler(c Config, token string) http.Handler {
 		report.Scope = "hub"
 		writeJSON(w, report)
 	})
+	mux.HandleFunc("POST /v1/reports", func(w http.ResponseWriter, r *http.Request) {
+		artifact, err := createHubArtifact(r.Context(), c, token, hubOrigin(c, r), r.URL.Query().Get("metric"))
+		if err != nil {
+			http.Error(w, "cannot generate hub report", http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, artifact)
+	})
 	mux.Handle("/mcp", mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
-		scheme := "http"
-		if r.TLS != nil {
-			scheme = "https"
-		}
-		origin := scheme + "://" + r.Host
-		if c.PublicURL != "" {
-			origin = c.PublicURL
-		}
-		return newMCPServer(c, true, origin)
+		return newMCPServer(c, true, hubOrigin(c, r), token)
 	}, nil))
 	mux.HandleFunc("GET /reports/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
@@ -100,8 +95,13 @@ func HubHandler(c Config, token string) http.Handler {
 	})
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, map[string]string{"status": "ok"}) })
 	want := sha256.Sum256([]byte("Bearer " + token))
+	web := newHubWeb(c, token)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
+		if r.URL.Path == "/" || r.URL.Path == "/login" || r.URL.Path == "/logout" {
+			web.ServeHTTP(w, r)
+			return
+		}
 		provided := sha256.Sum256([]byte(r.Header.Get("Authorization")))
 		signed := strings.HasPrefix(r.URL.Path, "/reports/") && validReportSignature(token, strings.TrimPrefix(r.URL.Path, "/reports/"), r.URL.Query().Get("expires"), r.URL.Query().Get("signature"), time.Now().UTC())
 		if subtle.ConstantTimeCompare(want[:], provided[:]) != 1 && !signed {
@@ -217,37 +217,66 @@ func Refresh(ctx context.Context, c Config) (Snapshot, error) {
 }
 
 func GetReport(ctx context.Context, c Config, hubMode bool, metric string, refresh bool) (Report, error) {
-	var syncErr error
-	if refresh && !hubMode {
-		_, syncErr = Refresh(ctx, c)
-	}
-	if c.HubURL != "" && !hubMode && syncErr == nil {
+	if !hubMode {
+		if c.HubURL == "" {
+			return Report{}, errors.New("reports are available only on the hub; configure hub_url")
+		}
+		if refresh {
+			if _, err := Refresh(ctx, c); err != nil {
+				return Report{}, err
+			}
+		}
 		var report Report
 		err := hubRequest(ctx, c, http.MethodGet, "/v1/report?metric="+url.QueryEscape(metric), nil, &report)
-		if err == nil {
-			return report, nil
-		}
-		syncErr = err
+		return report, err
 	}
-	dir := "snapshots"
-	if hubMode {
-		dir = "hub"
-	}
-	snapshots, err := (Store{Dir: filepath.Join(c.DataDir, dir)}).List(c.Account)
+	snapshots, err := (Store{Dir: filepath.Join(c.DataDir, "hub")}).List(c.Account)
 	if err != nil {
 		return Report{}, err
 	}
 	r, err := BuildReport(c, snapshots, time.Now().UTC(), metric)
-	if hubMode {
-		r.Scope = "hub"
-	}
-	if syncErr != nil {
-		r.Scope = "local_fallback"
-		r.CoverageComplete = false
-		for i := range r.Machines {
-			r.Machines[i].EstimatedQuotaPoints = nil
-		}
-		r.Warnings = append([]string{"Hub sync or local collection failed: " + syncErr.Error() + ". This is a cached local report, not the cross-computer total."}, r.Warnings...)
-	}
+	r.Scope = "hub"
 	return r, err
+}
+
+// GenerateReport requests server-side rendering. Clients never write HTML or
+// substitute local counters when the hub is unavailable.
+func GenerateReport(ctx context.Context, c Config, metric string, refresh bool) (HTMLArtifact, error) {
+	if c.HubURL == "" {
+		return HTMLArtifact{}, errors.New("reports are available only on the hub; configure hub_url")
+	}
+	if refresh {
+		if _, err := Refresh(ctx, c); err != nil {
+			return HTMLArtifact{}, err
+		}
+	}
+	var artifact HTMLArtifact
+	err := hubRequest(ctx, c, http.MethodPost, "/v1/reports?metric="+url.QueryEscape(metric), nil, &artifact)
+	return artifact, err
+}
+
+func createHubArtifact(ctx context.Context, c Config, token, origin, metric string) (HTMLArtifact, error) {
+	r, err := GetReport(ctx, c, true, metric, false)
+	if err != nil {
+		return HTMLArtifact{}, err
+	}
+	artifact, err := WriteHTMLReport(c, r, "")
+	if err != nil {
+		return artifact, err
+	}
+	artifact.URL = signedReportURL(origin, token, filepath.Base(artifact.Path), time.Now().UTC())
+	artifact.Path = ""
+	artifact.DisplayMarkdown = "[مشاهدهٔ گزارش مصرف کدکس](" + artifact.URL + ")"
+	return artifact, nil
+}
+
+func hubOrigin(c Config, r *http.Request) string {
+	if c.PublicURL != "" {
+		return strings.TrimRight(c.PublicURL, "/")
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
 }

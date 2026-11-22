@@ -2,17 +2,20 @@ package monitor
 
 import (
 	"context"
-	"path/filepath"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func NewMCPServer(c Config, hubMode bool) *mcp.Server {
-	return newMCPServer(c, hubMode, "")
+	token := ""
+	if hubMode {
+		token, _ = c.Token()
+	}
+	return newMCPServer(c, hubMode, c.PublicURL, token)
 }
 
-func newMCPServer(c Config, hubMode bool, origin string) *mcp.Server {
+func newMCPServer(c Config, hubMode bool, origin, token string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "codex-token-monitor", Version: Version}, nil)
 	type reportArgs struct {
 		Metric  string `json:"metric,omitempty" jsonschema:"Ranking metric: total_tokens (default) or non_cached_tokens. Cached input is included in total_tokens."`
@@ -20,24 +23,18 @@ func newMCPServer(c Config, hubMode bool, origin string) *mcp.Server {
 	}
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "generate_usage_report",
-		Description: "DEFAULT for requests to see a Codex usage report: collect counters, compare named computers, and generate a complete beautiful offline Persian HTML file with charts, daily trends, quota, model breakdown, and coverage. No LLM is called to render it. Call this once and display only the returned display_markdown; do not read the HTML or rewrite its contents. Server-side download links require a signed expiring access token; the hub secret is never included.",
+		Description: "DEFAULT for Codex usage reports: refresh this collector and request one standalone Persian HTML report on the hub, including all registered devices and per-session counters, rankings, charts, daily trends, quota, models, and coverage. Returns a signed hub link only; no local HTML or local fallback. Differing log account identities do not block token counts; uncertain shared quota is withheld. No LLM renders it. Call once and display only display_markdown; never read/rewrite the HTML. The hub secret is never in the link.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: new(false), OpenWorldHint: new(false)},
 	}, func(ctx context.Context, req *mcp.CallToolRequest, args reportArgs) (*mcp.CallToolResult, HTMLArtifact, error) {
-		r, err := GetReport(ctx, c, hubMode, args.Metric, args.Refresh == nil || *args.Refresh)
+		var artifact HTMLArtifact
+		var err error
+		if hubMode {
+			artifact, err = createHubArtifact(ctx, c, token, origin, args.Metric)
+		} else {
+			artifact, err = GenerateReport(ctx, c, args.Metric, args.Refresh == nil || *args.Refresh)
+		}
 		if err != nil {
 			return nil, HTMLArtifact{}, err
-		}
-		artifact, err := WriteHTMLReport(c, r, "")
-		if err != nil {
-			return nil, artifact, err
-		}
-		if hubMode && origin != "" {
-			token, err := c.Token()
-			if err != nil {
-				return nil, HTMLArtifact{}, err
-			}
-			artifact.URL = signedReportURL(origin, token, filepath.Base(artifact.Path), time.Now().UTC())
-			artifact.DisplayMarkdown = "[مشاهدهٔ گزارش مصرف کدکس](" + artifact.URL + ")"
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: artifact.DisplayMarkdown}}}, artifact, nil
 	})

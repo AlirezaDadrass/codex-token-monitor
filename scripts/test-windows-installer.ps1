@@ -43,7 +43,7 @@ try {
     $fakeKey = 'windows-installer-test-token-0000000000000000000000'
     $secureKey = ConvertTo-SecureString $fakeKey -AsPlainText -Force
     $dryRoot = Join-Path $testDirectory 'dry-run'
-    $plan = @(Install-WindowsMonitor -Mode Client -Version 'v0.1.2' -Architecture amd64 -Name 'رایانهٔ تست' -HubUrl 'https://monitor.example.com' -Token $secureKey -InstallRoot $dryRoot -NonInteractive -DryRun)
+    $plan = @(Install-WindowsMonitor -Mode Client -Version 'v0.1.3' -Architecture amd64 -Name 'رایانهٔ تست' -HubUrl 'https://monitor.example.com' -Token $secureKey -InstallRoot $dryRoot -NonInteractive -DryRun)
     Assert-InstallerTest (-not (Test-Path -LiteralPath $dryRoot)) 'Dry run changed the filesystem.'
     Assert-InstallerTest (($plan | Out-String) -notmatch [regex]::Escape($fakeKey)) 'Dry run disclosed a token.'
     Assert-Throws { Assert-HubAddress 'https://name:secret@monitor.example.com' } 'Accepted credentials in server URL.'
@@ -54,7 +54,7 @@ try {
     [void][IO.Directory]::CreateDirectory($package)
     Copy-Item -LiteralPath $BinaryPath -Destination (Join-Path $package 'token-monitor.exe')
     [IO.File]::WriteAllText((Join-Path $package 'unexpected.txt'), 'This file must never be extracted by the installer.')
-    $archive = Join-Path $testDirectory 'token-monitor_0.1.2_windows_amd64.zip'
+    $archive = Join-Path $testDirectory 'token-monitor_0.1.3_windows_amd64.zip'
     Compress-Archive -Path (Join-Path $package '*') -DestinationPath $archive
     $manifest = Join-Path $testDirectory 'checksums.txt'
     $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -74,12 +74,12 @@ try {
         $listener.Start(); $testPort = $listener.LocalEndpoint.Port; $listener.Stop()
         $hubAddress = 'http://127.0.0.1:' + $testPort
         $serverRoot = Join-Path $testDirectory 'server'
-        Install-WindowsMonitor -Mode Server -Version 'v0.1.2' -Architecture amd64 -Name 'مرکز تست' -PublicUrl $hubAddress -ListenAddress '127.0.0.1' -Port $testPort -Token $secureKey -InstallRoot $serverRoot -TaskName $testTask -ArchivePath $archive -ChecksumsPath $manifest -NonInteractive
+        Install-WindowsMonitor -Mode Server -Version 'v0.1.3' -Architecture amd64 -Name 'مرکز تست' -PublicUrl $hubAddress -ListenAddress '127.0.0.1' -Port $testPort -Token $secureKey -InstallRoot $serverRoot -TaskName $testTask -ArchivePath $archive -ChecksumsPath $manifest -NonInteractive
         $serverInstalled = $true
         $tokenBytes = [IO.File]::ReadAllBytes((Join-Path $serverRoot 'config/hub-token'))
         Assert-InstallerTest (([Text.Encoding]::UTF8.GetString($tokenBytes)).Trim() -ceq $fakeKey) 'The token changed in native stdin transmission.'
         $probeConfig = Join-Path $testDirectory 'probe/config.json'
-        $probeBinary = Join-Path $serverRoot 'bin/v0.1.2/token-monitor.exe'
+        $probeBinary = Join-Path $serverRoot 'bin/v0.1.3/token-monitor.exe'
         Invoke-MonitorBinary -Executable $probeBinary -Arguments @('init', '--non-interactive', '--name', 'native-probe', '--config', $probeConfig, '--data-dir', (Join-Path $testDirectory 'probe/data'), '--hub-url', $hubAddress, '--token-file', (Join-Path $serverRoot 'config/hub-token'))
         Invoke-MonitorBinary -Executable $probeBinary -Arguments @('collect', '--config', $probeConfig)
         $task = Get-ScheduledTask -TaskName $testTask
@@ -106,7 +106,7 @@ try {
         [void][IO.Directory]::CreateDirectory($env:CODEX_HOME)
         $env:TOKEN_MONITOR_TEST_REGISTRATION = Join-Path $testDirectory 'record.json'
         $clientRoot = Join-Path $testDirectory "O'Brien & رایانه"
-        Install-WindowsMonitor -Mode Client -Version 'v0.1.2' -Architecture amd64 -Name 'رایانهٔ ویندوز' -HubUrl $hubAddress -Token $secureKey -InstallRoot $clientRoot -ArchivePath $archive -ChecksumsPath $manifest -NonInteractive
+        Install-WindowsMonitor -Mode Client -Version 'v0.1.3' -Architecture amd64 -Name 'رایانهٔ ویندوز' -HubUrl $hubAddress -Token $secureKey -InstallRoot $clientRoot -ArchivePath $archive -ChecksumsPath $manifest -NonInteractive
         $clientConfig = Join-Path $clientRoot 'config/config.json'
         $profile = Get-Content -LiteralPath $clientConfig -Encoding UTF8 -Raw | ConvertFrom-Json
         Assert-InstallerTest ($profile.machine_name -eq 'رایانهٔ ویندوز') 'Unicode device name changed during installation.'
@@ -115,13 +115,14 @@ try {
         Assert-InstallerTest ($registered -contains [IO.Path]::GetFullPath($clientConfig)) 'Codex registration changed the config path.'
         Assert-PrivateAcl $profile.token_file $false
         $oldIdentity = $profile.machine_id
-        Install-WindowsMonitor -Mode Client -Version 'v0.1.2' -Architecture amd64 -InstallRoot $clientRoot -ArchivePath $archive -ChecksumsPath $manifest -NonInteractive
+        Install-WindowsMonitor -Mode Client -Version 'v0.1.3' -Architecture amd64 -InstallRoot $clientRoot -ArchivePath $archive -ChecksumsPath $manifest -NonInteractive
         $profile = Get-Content -LiteralPath $clientConfig -Encoding UTF8 -Raw | ConvertFrom-Json
         Assert-InstallerTest ($profile.machine_id -eq $oldIdentity) 'Reinstallation changed device identity.'
-        $clientExecutable = Join-Path $clientRoot 'bin/v0.1.2/token-monitor.exe'
+        $clientExecutable = Join-Path $clientRoot 'bin/v0.1.3/token-monitor.exe'
         Invoke-MonitorBinary -Executable $clientExecutable -Arguments @('collect', '--config', $clientConfig)
         Invoke-MonitorBinary -Executable $clientExecutable -Arguments @('report', '--html', '--no-refresh', '--config', $clientConfig)
-        Assert-InstallerTest (@(Get-ChildItem -LiteralPath (Join-Path $clientRoot 'data/reports') -Filter '*.html').Count -eq 1) 'Installed client did not generate an HTML report.'
+        Assert-InstallerTest (-not (Test-Path -LiteralPath (Join-Path $clientRoot 'data/reports'))) 'Installed client created a local HTML report.'
+        Assert-InstallerTest (@(Get-ChildItem -LiteralPath (Join-Path $serverRoot 'data/reports') -Filter '*.html').Count -eq 1) 'Hub did not generate the HTML report.'
     }
     Write-Output ('Windows installer checks passed in PowerShell ' + $PSVersionTable.PSVersion)
 } finally {

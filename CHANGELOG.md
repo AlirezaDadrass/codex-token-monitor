@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3
+
+- Added a token-login dashboard on the hub's root URL, using expiring HttpOnly sessions, logout, and the existing standalone Persian report design.
+- Reports show all registered devices in the configured group, plus per-session counters, device filters and session quota-share estimates when supported by the observations.
+- Differing account identities in retained logs no longer abort token reports. Shared quota and quota estimates are withheld when account identity is ambiguous; configured account groups remain isolated.
+- HTML rendering now happens only on the hub. Local MCP/CLI requests return signed hub links, with no local HTML generation or local-counter fallback during hub failures.
+
 ## 0.1.2
 
 - Added a standalone PowerShell installer for Windows clients and servers, with verified prebuilt x64/ARM64 downloads and offline installation.

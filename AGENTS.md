@@ -10,6 +10,8 @@ For a server installation, use [docs/SERVER.md](docs/SERVER.md) and the interact
 
 After installation, run an authenticated connection check and generate an HTML report. Report the actual number of connected devices. For routine report requests, call `generate_usage_report` once and show its `display_markdown`; do not read/rewrite the HTML with the model.
 
+Reports are hub-only. Local collectors send counters and request signed hub report links; never render local HTML or substitute local counters when the hub fails. The hub root URL shows a token-login page and the combined device/session report. Differing account fingerprints in retained logs must not block token reports; withhold uncertain shared quota instead of merging allowance percentages.
+
 ## Development
 
 - Build, run and test natively. Do not introduce Docker, Compose, testcontainers, extra PostgreSQL, or Redis services. This project uses local files and does not need a database service.

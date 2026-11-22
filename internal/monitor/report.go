@@ -2,9 +2,7 @@ package monitor
 
 import (
 	"errors"
-	"fmt"
 	"sort"
-	"strings"
 	"time"
 	_ "time/tzdata"
 )
@@ -30,24 +28,41 @@ type QuotaReport struct {
 	Active           bool    `json:"active"`
 }
 
+// SessionReport contains counters only. ID is the existing hash of the Codex
+// session ID; chat titles, contents and project paths never enter the report.
+// A session continued on another computer has a separate row for each device.
+type SessionReport struct {
+	ID                   string    `json:"session_id"`
+	MachineID            string    `json:"machine_id"`
+	MachineName          string    `json:"machine_name"`
+	FirstSeen            time.Time `json:"first_seen"`
+	LastSeen             time.Time `json:"last_seen"`
+	Tokens               Tokens    `json:"tokens"`
+	NonCachedTokens      int64     `json:"non_cached_tokens"`
+	SharePercent         float64   `json:"share_of_observed_tokens_percent"`
+	EstimatedQuotaPoints *float64  `json:"estimated_weekly_limit_percentage_points"`
+}
+
 type Report struct {
-	Account           string          `json:"account"`
-	GeneratedAt       time.Time       `json:"generated_at"`
-	Scope             string          `json:"scope"`
-	WindowSource      string          `json:"window_source"`
-	WindowStart       time.Time       `json:"window_start"`
-	WindowEnd         time.Time       `json:"window_end"`
-	RankingMetric     string          `json:"ranking_metric"`
-	WeeklyQuota       *QuotaReport    `json:"account_weekly_quota"`
-	ReportingMachines int             `json:"reporting_machines"`
-	FreshMachines     int             `json:"fresh_machines"`
-	CoverageComplete  bool            `json:"coverage_complete"`
-	Totals            Tokens          `json:"observed_tokens"`
-	Unattributed      Tokens          `json:"unattributed_tokens"`
-	ConflictingEvents int             `json:"conflicting_events"`
-	Machines          []MachineReport `json:"machines"`
-	Daily             []DayUsage      `json:"daily"`
-	Warnings          []string        `json:"warnings"`
+	Account                  string          `json:"account"`
+	GeneratedAt              time.Time       `json:"generated_at"`
+	Scope                    string          `json:"scope"`
+	WindowSource             string          `json:"window_source"`
+	WindowStart              time.Time       `json:"window_start"`
+	WindowEnd                time.Time       `json:"window_end"`
+	RankingMetric            string          `json:"ranking_metric"`
+	WeeklyQuota              *QuotaReport    `json:"account_weekly_quota"`
+	AccountIdentityAmbiguous bool            `json:"account_identity_ambiguous"`
+	ReportingMachines        int             `json:"reporting_machines"`
+	FreshMachines            int             `json:"fresh_machines"`
+	CoverageComplete         bool            `json:"coverage_complete"`
+	Totals                   Tokens          `json:"observed_tokens"`
+	Unattributed             Tokens          `json:"unattributed_tokens"`
+	ConflictingEvents        int             `json:"conflicting_events"`
+	Machines                 []MachineReport `json:"machines"`
+	Sessions                 []SessionReport `json:"sessions"`
+	Daily                    []DayUsage      `json:"daily"`
+	Warnings                 []string        `json:"warnings"`
 }
 
 func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (Report, error) {
@@ -59,7 +74,7 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 	}
 	r := Report{Account: c.Account, GeneratedAt: now, Scope: "local", WindowSource: "rolling_7_days",
 		WindowStart: now.Add(-7 * 24 * time.Hour), WindowEnd: now, RankingMetric: metric,
-		Machines: []MachineReport{}, Warnings: []string{}}
+		Machines: []MachineReport{}, Sessions: []SessionReport{}, Warnings: []string{}}
 	byDevice := map[string]Snapshot{}
 	for _, s := range snapshots {
 		if s.Account != c.Account {
@@ -78,12 +93,12 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 	var latest *Quota
 	for _, s := range devices {
 		for _, e := range s.Events {
-			if !e.At.Before(r.WindowStart) && e.AccountFingerprint != "" {
+			if !e.At.Before(r.WindowStart) && !e.At.After(now) && e.AccountFingerprint != "" {
 				fingerprints[e.AccountFingerprint] = true
 			}
 		}
 		for _, q := range s.Quotas {
-			if q.LimitID != c.LimitID || q.WindowMinutes != 10080 {
+			if q.LimitID != c.LimitID || q.WindowMinutes != 10080 || q.At.After(now) {
 				continue
 			}
 			if q.AccountFingerprint != "" {
@@ -96,12 +111,13 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 		}
 	}
 	if len(fingerprints) > 1 {
-		ids := []string{}
-		for id := range fingerprints {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-		return r, fmt.Errorf("multiple OpenAI accounts detected; set account_fingerprint in each collector config to one of: %s", strings.Join(ids, ", "))
+		// Device/session counters are still reportable. Metadata from retained
+		// logs cannot establish that all quota observations share one allowance.
+		// Keep the configured account-group boundary and withhold a shared quota
+		// instead of failing the entire hub report or combining percentages.
+		r.AccountIdentityAmbiguous = true
+		latest = nil
+		r.Warnings = append(r.Warnings, "Account identities in retained logs differ; all registered device/session counters in this account group are shown for the last 7 days. A shared weekly quota and quota-share estimates cannot be established.")
 	}
 	if latest != nil {
 		start := latest.ResetsAt.Add(-7 * 24 * time.Hour)
@@ -121,7 +137,7 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 		if active && latest.UsedPercent >= 100 {
 			r.Warnings = append(r.Warnings, "The weekly allowance has been reached. Token counts may include continued use with purchased credits; per-device allowance estimates are unavailable.")
 		}
-	} else {
+	} else if !r.AccountIdentityAmbiguous {
 		r.Warnings = append(r.Warnings, "No weekly quota was found for the configured limit_id; using the last 7 days.")
 	}
 	r.ReportingMachines = len(devices)
@@ -154,7 +170,23 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 			}
 		}
 	}
-	sessions := map[string]map[string]bool{}
+	sessions := map[string]*SessionReport{}
+	deviceSessions := map[string]map[string]bool{}
+	addSession := func(e UsageEvent, machineID, machineName string) {
+		key := machineID + "/" + e.Session
+		s := sessions[key]
+		if s == nil {
+			s = &SessionReport{ID: e.Session, MachineID: machineID, MachineName: machineName, FirstSeen: e.At, LastSeen: e.At}
+			sessions[key] = s
+		}
+		s.Tokens = s.Tokens.Add(e.Tokens)
+		if e.At.Before(s.FirstSeen) {
+			s.FirstSeen = e.At
+		}
+		if e.At.After(s.LastSeen) {
+			s.LastSeen = e.At
+		}
+	}
 	location, _ := time.LoadLocation("Asia/Tehran")
 	days := map[string]*DayUsage{}
 	startDay := r.WindowStart.In(location)
@@ -174,6 +206,7 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 		if len(claim.machines) > 1 || claim.mismatch {
 			r.Unattributed = r.Unattributed.Add(e.Tokens)
 			r.ConflictingEvents++
+			addSession(e, "", "")
 			continue
 		}
 		for id := range claim.machines {
@@ -181,10 +214,11 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 			m := &r.Machines[indexes[id]]
 			m.Tokens = m.Tokens.Add(e.Tokens)
 			m.Models[e.Model] = m.Models[e.Model].Add(e.Tokens)
-			if sessions[id] == nil {
-				sessions[id] = map[string]bool{}
+			if deviceSessions[id] == nil {
+				deviceSessions[id] = map[string]bool{}
 			}
-			sessions[id][e.Session] = true
+			deviceSessions[id][e.Session] = true
+			addSession(e, id, m.Name)
 		}
 	}
 	for _, day := range days {
@@ -220,7 +254,7 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 	for i := range r.Machines {
 		m := &r.Machines[i]
 		m.NonCachedTokens = m.Tokens.NonCached()
-		m.Sessions = len(sessions[m.ID])
+		m.Sessions = len(deviceSessions[m.ID])
 		if denominator > 0 {
 			m.SharePercent = 100 * float64(value(m.Tokens)) / float64(denominator)
 		}
@@ -229,6 +263,27 @@ func BuildReport(c Config, snapshots []Snapshot, now time.Time, metric string) (
 			m.EstimatedQuotaPoints = &estimate
 		}
 	}
+	for _, s := range sessions {
+		s.NonCachedTokens = s.Tokens.NonCached()
+		if denominator > 0 {
+			s.SharePercent = 100 * float64(value(s.Tokens)) / float64(denominator)
+		}
+		if s.MachineID != "" && denominator > 0 && r.CoverageComplete && r.WeeklyQuota != nil && r.WeeklyQuota.Active && !r.WeeklyQuota.Stale && r.WeeklyQuota.UsedPercent < 100 {
+			estimate := s.SharePercent / 100 * r.WeeklyQuota.UsedPercent
+			s.EstimatedQuotaPoints = &estimate
+		}
+		r.Sessions = append(r.Sessions, *s)
+	}
+	sort.Slice(r.Sessions, func(i, j int) bool {
+		a, b := r.Sessions[i], r.Sessions[j]
+		if value(a.Tokens) != value(b.Tokens) {
+			return value(a.Tokens) > value(b.Tokens)
+		}
+		if a.MachineID != b.MachineID {
+			return a.MachineID < b.MachineID
+		}
+		return a.ID < b.ID
+	})
 	sort.Slice(r.Machines, func(i, j int) bool {
 		if value(r.Machines[i].Tokens) == value(r.Machines[j].Tokens) {
 			return r.Machines[i].ID < r.Machines[j].ID

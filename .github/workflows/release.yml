@@ -39,7 +39,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          printf 'Prebuilt Linux, macOS, and Windows amd64/arm64 packages. No Go toolchain is needed on the destination.\n\nWindows installer: download install-windows.ps1 and run it with -Mode Client or -Mode Server.\n\nGuide: https://github.com/%s/blob/%s/docs/WINDOWS.md\n' "$GITHUB_REPOSITORY" "$TAG" > "$RUNNER_TEMP/release-notes.md"
-          gh release create "$TAG" --verify-tag --draft --title "$TAG — Windows installer and prebuilt binaries" --notes-file "$RUNNER_TEMP/release-notes.md"
+          printf 'Prebuilt Linux, macOS, and Windows amd64/arm64 packages. No Go toolchain is needed on the destination.\n\nHub dashboard: open the hub root URL and sign in with its token. Includes per-device and per-session reports; HTML is generated only on the hub. Windows installer: download install-windows.ps1 and run it with -Mode Client or -Mode Server.\n\nGuide: https://github.com/%s/blob/%s/docs/WINDOWS.md\n' "$GITHUB_REPOSITORY" "$TAG" > "$RUNNER_TEMP/release-notes.md"
+          gh release create "$TAG" --verify-tag --draft --title "$TAG — Hub dashboard and session reports" --notes-file "$RUNNER_TEMP/release-notes.md"
           gh release upload "$TAG" dist/token-monitor_"${TAG#v}"_*.tar.gz dist/token-monitor_"${TAG#v}"_*.zip dist/install-windows.ps1 dist/checksums.txt
           gh release edit "$TAG" --draft=false --latest

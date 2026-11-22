@@ -111,9 +111,88 @@ func TestOtherAccountsAndLimitBuckets(t *testing.T) {
 	b.Account = c.Account
 	a.Events[0].AccountFingerprint = hash("a")
 	b.Events[0].AccountFingerprint = hash("b")
-	_, err = BuildReport(c, []Snapshot{a, b}, now, "")
-	if err == nil || !strings.Contains(err.Error(), "multiple OpenAI accounts") {
-		t.Fatal("silently mixed actual accounts")
+	r, err = BuildReport(c, []Snapshot{a, b}, now, "")
+	if err != nil || r.Totals.Total != 1000 || r.ReportingMachines != 2 || !r.AccountIdentityAmbiguous || r.WeeklyQuota != nil || r.WindowSource != "rolling_7_days" {
+		t.Fatalf("identity metadata blocked device counters or combined quotas: %+v %v", r, err)
+	}
+	for _, m := range r.Machines {
+		if m.EstimatedQuotaPoints != nil {
+			t.Fatal("estimated a shared quota from differing identities")
+		}
+	}
+}
+
+func TestSessionBreakdownContinuationDuplicatesAndMetrics(t *testing.T) {
+	c := testConfig(t)
+	now := time.Now().UTC()
+	a, b := sampleSnapshot("laptop", 100, now), sampleSnapshot("desktop", 200, now)
+	// One copied event stays unattributed; the rest of a continued session is
+	// attributed to the computer that observed it, never to its creator.
+	sharedSession := a.Events[0].Session
+	b.Events[0].Session = sharedSession
+	b.Events = append(b.Events, a.Events[0])
+	more := a.Events[0]
+	more.ID, more.At, more.Tokens = hash("later"), now.Add(-30*time.Minute), tokens(30, 20, 5, 0)
+	a.Events = append(a.Events, more)
+	another := more
+	another.ID, another.Session, another.Tokens = hash("another"), hash("another-session"), tokens(50, 0, 0, 0)
+	a.Events = append(a.Events, another)
+	old := more
+	old.ID, old.At = hash("old-session-event"), now.Add(-8*24*time.Hour)
+	a.Events = append(a.Events, old)
+	for _, metric := range []string{"total_tokens", "non_cached_tokens"} {
+		r, err := BuildReport(c, []Snapshot{a, b}, now, metric)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.Totals.Total != 385 || r.Unattributed.Total != 100 || len(r.Sessions) != 4 {
+			t.Fatalf("wrong session split: %+v", r)
+		}
+		var total Tokens
+		var share float64
+		for _, s := range r.Sessions {
+			total = total.Add(s.Tokens)
+			share += s.SharePercent
+			if s.EstimatedQuotaPoints != nil {
+				t.Fatal("estimated quota despite duplicated history")
+			}
+			if s.ID == sharedSession && s.MachineID == "laptop" && (s.Tokens.Total != 35 || !s.FirstSeen.Equal(more.At) || !s.LastSeen.Equal(more.At)) {
+				t.Fatalf("continued session totals/timestamps wrong: %+v", s)
+			}
+		}
+		if total != r.Totals || share < 99.999999 || share > 100.000001 {
+			t.Fatal("session rows do not reconcile to observed total")
+		}
+		if r.Machines[0].Sessions != 1 || r.Machines[1].Sessions != 2 {
+			t.Fatal("device session count changed")
+		}
+		if metric == "non_cached_tokens" && r.Sessions[3].NonCachedTokens != 15 {
+			t.Fatalf("session metric double-counted cache/reasoning: %+v", r.Sessions[3])
+		}
+	}
+}
+
+func TestSharedQuotaSessionEstimatesAndIdentityMismatch(t *testing.T) {
+	c := testConfig(t)
+	now := time.Now().UTC()
+	a, b := sampleSnapshot("a", 100, now), sampleSnapshot("b", 300, now)
+	for _, s := range []*Snapshot{&a, &b} {
+		s.Events[0].AccountFingerprint = hash("shared-account")
+		s.Quotas[0].AccountFingerprint = hash("shared-account")
+	}
+	r, err := BuildReport(c, []Snapshot{a, b}, now, "")
+	if err != nil || len(r.Sessions) != 2 || r.AccountIdentityAmbiguous || r.WeeklyQuota == nil || r.Sessions[0].EstimatedQuotaPoints == nil || *r.Sessions[0].EstimatedQuotaPoints != 45 {
+		t.Fatalf("single-account quota/session estimate failed: %+v %v", r, err)
+	}
+	b.Events[0].AccountFingerprint = hash("different-log-metadata")
+	r, err = BuildReport(c, []Snapshot{a, b}, now, "")
+	if err != nil || r.Totals.Total != 400 || r.WeeklyQuota != nil || !r.AccountIdentityAmbiguous || len(r.Sessions) != 2 {
+		t.Fatalf("log identity mismatch stopped reporting: %+v %v", r, err)
+	}
+	for _, s := range r.Sessions {
+		if s.EstimatedQuotaPoints != nil {
+			t.Fatal("invented shared allowance")
+		}
 	}
 }
 

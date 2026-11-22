@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -50,6 +51,7 @@ func TestHubThreeCollectorsAuthValidationAndMCP(t *testing.T) {
 			client := c
 			client.HubURL = hub.URL
 			snapshot := sampleSnapshot(id, int64(id[0]), now)
+			snapshot.Events[0].AccountFingerprint = hash("retained-identity-" + id)
 			var out map[string]bool
 			for i := 0; i < 2; i++ {
 				if err := hubRequest(context.Background(), client, "POST", "/v1/snapshots", snapshot, &out); err != nil {
@@ -65,7 +67,7 @@ func TestHubThreeCollectorsAuthValidationAndMCP(t *testing.T) {
 	if err := hubRequest(context.Background(), client, "GET", "/v1/report", nil, &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.ReportingMachines != 3 || report.Totals.Total != 294 || report.Scope != "hub" {
+	if report.ReportingMachines != 3 || report.Totals.Total != 294 || report.Scope != "hub" || len(report.Sessions) != 3 || !report.AccountIdentityAmbiguous || report.WeeklyQuota != nil {
 		t.Fatalf("incorrect shared report: %+v", report)
 	}
 	bad := sampleSnapshot("bad", 20, now)
@@ -94,6 +96,9 @@ func TestHubThreeCollectorsAuthValidationAndMCP(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	// A token-file override used to start the hub must also be used when signing
+	// MCP reports, even when the process environment contains an older token.
+	t.Setenv("TOKEN_MONITOR_HUB_TOKEN", "old-environment-token-with-thirty-two-plus-characters")
 	mcpClient := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil)
 	session, err := mcpClient.Connect(ctx, &mcp.StreamableClientTransport{Endpoint: hub.URL + "/mcp", HTTPClient: &http.Client{Transport: bearerTransport{http.DefaultTransport}}, DisableStandaloneSSE: true}, nil)
 	if err != nil {
@@ -141,7 +146,8 @@ func TestHubThreeCollectorsAuthValidationAndMCP(t *testing.T) {
 	if response.StatusCode != 200 {
 		t.Fatalf("signed download failed: %d", response.StatusCode)
 	}
-	response, err = http.Get(hub.URL + "/reports/" + filepath.Base(artifact.Path))
+	artifactURL, _ := url.Parse(artifact.URL)
+	response, err = http.Get(hub.URL + artifactURL.Path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +157,7 @@ func TestHubThreeCollectorsAuthValidationAndMCP(t *testing.T) {
 	}
 }
 
-func TestHubUnavailableGivesExplicitLocalFallback(t *testing.T) {
+func TestHubUnavailableNeverReturnsLocalReport(t *testing.T) {
 	c := testConfig(t)
 	now := time.Now().UTC()
 	c.HubURL = "http://127.0.0.1:1"
@@ -161,11 +167,56 @@ func TestHubUnavailableGivesExplicitLocalFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, err := GetReport(context.Background(), c, false, "", false)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil || r.Totals.Total != 0 || r.Scope != "" {
+		t.Fatalf("hub outage was replaced with a local report: %+v %v", r, err)
 	}
-	if r.Scope != "local_fallback" || r.CoverageComplete || r.Totals.Total != 100 || len(r.Warnings) == 0 {
-		t.Fatalf("bad offline report: %+v", r)
+	if _, err := GenerateReport(context.Background(), c, "", false); err == nil {
+		t.Fatal("offline HTML report succeeded")
+	}
+	c.HubURL = ""
+	if _, err := GetReport(context.Background(), c, false, "", false); err == nil {
+		t.Fatal("standalone report still available")
+	}
+}
+
+func TestCollectorsUploadAllSessionsToOneHub(t *testing.T) {
+	hubConfig := testConfig(t)
+	hub := httptest.NewServer(HubHandler(hubConfig, testToken))
+	defer hub.Close()
+	t.Setenv("TOKEN_MONITOR_HUB_TOKEN", testToken)
+	now := time.Now().UTC()
+	var clients []Config
+	for device := 1; device <= 3; device++ {
+		c := testConfig(t)
+		c.MachineID, c.MachineName = fmt.Sprintf("pc-%d", device), fmt.Sprintf("Computer %d", device)
+		c.HubURL = hub.URL
+		for session := 1; session <= 2; session++ {
+			meta := jsonLine(map[string]any{"type": "session_meta", "payload": map[string]any{"id": fmt.Sprintf("pc-%d-session-%d", device, session), "creator_account_id": fmt.Sprintf("retained-metadata-%d", device%2), "model_provider": "openai"}})
+			first, last := tokens(int64(100*device), 0, 0, 0), tokens(int64(50*device), 0, 0, 0)
+			total := first.Add(last)
+			writeFile(t, filepath.Join(c.CodexHome, "sessions", fmt.Sprintf("session-%d.jsonl", session)), meta+tokenLine(now.Add(-2*time.Hour), &first, &first, nil, nil)+tokenLine(now.Add(-time.Hour), &total, &last, nil, window(60, 10080, now.Add(time.Hour))))
+		}
+		if _, err := Refresh(context.Background(), c); err != nil {
+			t.Fatal(err)
+		}
+		// Incremental retry must replace the device snapshot, never add it again.
+		if _, err := Refresh(context.Background(), c); err != nil {
+			t.Fatal(err)
+		}
+		clients = append(clients, c)
+	}
+	r, err := GetReport(context.Background(), clients[0], false, "", false)
+	if err != nil || r.Scope != "hub" || r.ReportingMachines != 3 || len(r.Sessions) != 6 || r.Totals.Total != 1800 || !r.AccountIdentityAmbiguous {
+		t.Fatalf("collectors did not produce one shared session report: %+v %v", r, err)
+	}
+	for _, m := range r.Machines {
+		if m.Sessions != 2 {
+			t.Fatalf("missing sessions for %s", m.Name)
+		}
+	}
+	a, err := GenerateReport(context.Background(), clients[0], "", false)
+	if err != nil || a.ReportingMachines != 3 || a.Path != "" || a.URL == "" {
+		t.Fatalf("hub HTML failed: %+v %v", a, err)
 	}
 }
 
@@ -234,6 +285,10 @@ func TestStdioMCPBinary(t *testing.T) {
 		t.Fatalf("build: %v %s", err, b)
 	}
 	c := testConfig(t)
+	hub := httptest.NewServer(HubHandler(testConfig(t), testToken))
+	defer hub.Close()
+	c.HubURL = hub.URL
+	t.Setenv("TOKEN_MONITOR_HUB_TOKEN", testToken)
 	now := time.Now().UTC()
 	a := tokens(123, 100, 10, 5)
 	writeFile(t, filepath.Join(c.CodexHome, "sessions", "one.jsonl"), metaLine()+tokenLine(now.Add(-time.Second), &a, &a, nil, window(50, 10080, now.Add(time.Hour))))
@@ -275,7 +330,11 @@ func TestStdioMCPBinary(t *testing.T) {
 	if err := json.Unmarshal(b, &artifact); err != nil {
 		t.Fatal(err)
 	}
-	if artifact.Path == "" || artifact.LLMCalls != 0 || artifact.ReportingMachines != 1 {
+	if artifact.Path != "" || artifact.URL == "" || artifact.LLMCalls != 0 || artifact.ReportingMachines != 1 {
 		t.Fatalf("bad HTML artifact: %s", b)
+	}
+	files, _ := filepath.Glob(filepath.Join(c.DataDir, "reports", "*.html"))
+	if len(files) != 0 {
+		t.Fatal("stdio client created a local HTML report")
 	}
 }

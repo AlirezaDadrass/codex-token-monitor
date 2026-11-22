@@ -32,7 +32,7 @@ var reportFontLicense string
 var reportFilePattern = regexp.MustCompile(`^usage-[0-9]{8}-[a-f0-9]{16}\.html$`)
 
 type HTMLArtifact struct {
-	Path              string    `json:"file_path"`
+	Path              string    `json:"file_path,omitempty"`
 	URL               string    `json:"url,omitempty"`
 	DisplayMarkdown   string    `json:"display_markdown"`
 	GeneratedAt       time.Time `json:"generated_at"`
@@ -64,6 +64,10 @@ func WriteHTMLReport(c Config, report Report, output string) (HTMLArtifact, erro
 }
 
 func RenderHTML(w io.Writer, report Report) error {
+	return renderHTML(w, report, false)
+}
+
+func renderHTML(w io.Writer, report Report, hubWeb bool) error {
 	data, err := json.Marshal(report)
 	if err != nil {
 		return err
@@ -74,14 +78,16 @@ func RenderHTML(w io.Writer, report Report) error {
 		Notes       []string
 		Font        template.URL
 		FontLicense string
+		HubWeb      bool
 	}{Report: report, JSON: template.JS(data), Notes: reportNotes(report),
-		Font: template.URL("data:font/ttf;base64," + base64.StdEncoding.EncodeToString(reportFont)), FontLicense: reportFontLicense}
+		Font: template.URL("data:font/ttf;base64," + base64.StdEncoding.EncodeToString(reportFont)), FontLicense: reportFontLicense, HubWeb: hubWeb}
 	t, err := template.New("usage").Funcs(template.FuncMap{
 		"number":     exactNumber,
 		"short":      shortNumber,
 		"percent":    func(v float64) string { return persianNumber(strconv.FormatFloat(v, 'f', 1, 64)) + "٪" },
 		"indexColor": func(i int) string { return []string{"#156d62", "#4d69d8", "#ce8235", "#9a62bd", "#d45f78"}[i%5] },
 		"counter":    func(i int) string { return persianNumber(strconv.Itoa(i + 1)) },
+		"shortID":    func(id string) string { return id[:min(12, len(id))] },
 	}).Parse(reportTemplate)
 	if err != nil {
 		return err
@@ -127,13 +133,12 @@ func persianNumber(s string) string {
 
 func reportNotes(r Report) []string {
 	notes := []string{}
-	if r.Scope == "local_fallback" {
-		notes = append(notes, "ارتباط با مرکز یا خواندن داده‌ها موفق نبود؛ این فایل فقط آمار محلیِ ذخیره‌شده را نشان می‌دهد.")
-	}
 	if !r.CoverageComplete {
 		notes = append(notes, "پوشش داده‌ها کامل نیست. تعداد دستگاه‌های گزارش‌دهنده، زمان همگام‌سازی و سابقهٔ موجود را در این گزارش بررسی کنید.")
 	}
-	if r.WeeklyQuota == nil || !r.WeeklyQuota.Active {
+	if r.AccountIdentityAmbiguous {
+		notes = append(notes, "شناسه‌های حساب در لاگ‌ها یکسان نیستند؛ سهمیهٔ مشترک قابل تأیید نیست. مصرف همهٔ دستگاه‌ها و سشن‌ها در هفت روز اخیر نمایش داده می‌شود، اما درصد سهمیه و تخمین سهم از لیمیت خالی می‌ماند.")
+	} else if r.WeeklyQuota == nil || !r.WeeklyQuota.Active {
 		notes = append(notes, "درصد معتبر سهمیهٔ هفتهٔ جاری در دسترس نیست؛ شمارش توکن‌ها مربوط به هفت روز اخیر است.")
 	} else {
 		if r.WeeklyQuota.Stale {

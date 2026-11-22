@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Client', 'Server')][string]$Mode = 'Client',
-    [ValidatePattern('^v[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = 'v0.1.2',
+    [ValidatePattern('^v[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = 'v0.1.3',
     [ValidateSet('Auto', 'amd64', 'arm64')][string]$Architecture = 'Auto',
     [string]$Name,
     [string]$HubUrl,
@@ -158,7 +158,7 @@ function Install-VerifiedExecutable([string]$Archive, [string]$Destination) {
 function Install-WindowsMonitor {
     [CmdletBinding()]
     param(
-        [string]$Mode = 'Client', [string]$Version = 'v0.1.2', [string]$Architecture = 'Auto', [string]$Name, [string]$HubUrl,
+        [string]$Mode = 'Client', [string]$Version = 'v0.1.3', [string]$Architecture = 'Auto', [string]$Name, [string]$HubUrl,
         [Security.SecureString]$Token, [string]$TokenFile, [string]$InstallRoot,
         [string]$ListenAddress = '127.0.0.1', [int]$Port = 8787, [string]$PublicUrl, [string]$TlsCertificate,
         [string]$TlsKey, [string]$TaskName = 'CodexTokenMonitorHub', [string]$ArchivePath, [string]$ChecksumsPath,
