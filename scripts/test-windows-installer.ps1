@@ -78,12 +78,19 @@ try {
         $serverInstalled = $true
         $tokenBytes = [IO.File]::ReadAllBytes((Join-Path $serverRoot 'config/hub-token'))
         Assert-InstallerTest (([Text.Encoding]::UTF8.GetString($tokenBytes)).Trim() -eq $fakeKey) 'The token changed in native stdin transmission.'
+        Add-Type -AssemblyName System.Net.Http
+        $httpHandler = New-Object Net.Http.HttpClientHandler
+        $httpHandler.UseProxy = $false
+        $httpClient = New-Object Net.Http.HttpClient($httpHandler)
+        $httpClient.DefaultRequestHeaders.Authorization = New-Object Net.Http.Headers.AuthenticationHeaderValue('Bearer', $fakeKey)
         $healthy = $false
         $lastHealthError = ''
         for ($attempt = 0; $attempt -lt 20; $attempt++) {
             try {
-                $response = Invoke-WebRequest -UseBasicParsing -Uri "$hubAddress/health" -Headers @{ Authorization = 'Bearer ' + $fakeKey }
-                if ($response.StatusCode -eq 200) { $healthy = $true; break }
+                $response = $httpClient.GetAsync("$hubAddress/health").GetAwaiter().GetResult()
+                if ([int]$response.StatusCode -eq 200) { $healthy = $true; $response.Dispose(); break }
+                $lastHealthError = [string]$response.StatusCode
+                $response.Dispose(); Start-Sleep -Milliseconds 500
             } catch { $lastHealthError = $_.Exception.Message; Start-Sleep -Milliseconds 500 }
         }
         if (-not $healthy) {
@@ -96,7 +103,10 @@ try {
         if ($taskUser -ne 'S-1-5-19') { $taskUser = (New-Object Security.Principal.NTAccount($taskUser)).Translate([Security.Principal.SecurityIdentifier]).Value }
         Assert-InstallerTest ($taskUser -eq 'S-1-5-19') 'Server task runs under the wrong account.'
         Assert-PrivateAcl (Join-Path $serverRoot 'config/hub-token') $true
-        Assert-Throws { Invoke-WebRequest -UseBasicParsing -Uri "$hubAddress/health" | Out-Null } 'Unauthenticated server access succeeded.'
+        $httpClient.DefaultRequestHeaders.Authorization = $null
+        $unauthorized = $httpClient.GetAsync("$hubAddress/health").GetAwaiter().GetResult()
+        Assert-InstallerTest ([int]$unauthorized.StatusCode -eq 401) 'Unauthenticated server access succeeded.'
+        $unauthorized.Dispose(); $httpClient.Dispose(); $httpHandler.Dispose()
 
         # An npm-style codex.cmd launcher must receive Unicode/space-containing paths intact.
         $mockDirectory = Join-Path $testDirectory 'mock-codex'
