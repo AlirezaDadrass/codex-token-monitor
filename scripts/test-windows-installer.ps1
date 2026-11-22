@@ -78,33 +78,19 @@ try {
         $serverInstalled = $true
         $tokenBytes = [IO.File]::ReadAllBytes((Join-Path $serverRoot 'config/hub-token'))
         Assert-InstallerTest (([Text.Encoding]::UTF8.GetString($tokenBytes)).Trim() -ceq $fakeKey) 'The token changed in native stdin transmission.'
-        Add-Type -AssemblyName System.Net.Http
-        $httpHandler = New-Object Net.Http.HttpClientHandler
-        $httpHandler.UseProxy = $false
-        $httpClient = New-Object Net.Http.HttpClient($httpHandler)
-        $httpClient.DefaultRequestHeaders.Authorization = New-Object Net.Http.Headers.AuthenticationHeaderValue('Bearer', $fakeKey)
-        Write-Output ('Machine token environment override present: ' + [bool][Environment]::GetEnvironmentVariable('TOKEN_MONITOR_HUB_TOKEN', 'Machine'))
-        $healthy = $false
-        $lastHealthError = ''
-        for ($attempt = 0; $attempt -lt 20; $attempt++) {
-            try {
-                $response = $httpClient.GetAsync("$hubAddress/health").GetAwaiter().GetResult()
-                if ([int]$response.StatusCode -eq 200) { $healthy = $true; $response.Dispose(); break }
-                $lastHealthError = [string]$response.StatusCode
-                $response.Dispose(); Start-Sleep -Milliseconds 500
-            } catch { $lastHealthError = $_.Exception.Message; Start-Sleep -Milliseconds 500 }
-        }
-        if (-not $healthy) {
-            Write-Output (Get-ScheduledTaskInfo -TaskName $testTask | Out-String)
-            Write-Output (Get-Acl -LiteralPath (Join-Path $serverRoot 'config/hub-token') | Format-List | Out-String)
-        }
-        Assert-InstallerTest $healthy ('The native server task did not pass authenticated health checks: ' + $lastHealthError)
+        $probeConfig = Join-Path $testDirectory 'probe/config.json'
+        $probeBinary = Join-Path $serverRoot 'bin/v0.1.2/token-monitor.exe'
+        Invoke-MonitorBinary -Executable $probeBinary -Arguments @('init', '--non-interactive', '--name', 'native-probe', '--config', $probeConfig, '--data-dir', (Join-Path $testDirectory 'probe/data'), '--hub-url', $hubAddress, '--token-file', (Join-Path $serverRoot 'config/hub-token'))
+        Invoke-MonitorBinary -Executable $probeBinary -Arguments @('collect', '--config', $probeConfig)
         $task = Get-ScheduledTask -TaskName $testTask
         $taskUser = $task.Principal.UserId
         if ($taskUser -ne 'S-1-5-19') { $taskUser = (New-Object Security.Principal.NTAccount($taskUser)).Translate([Security.Principal.SecurityIdentifier]).Value }
         Assert-InstallerTest ($taskUser -eq 'S-1-5-19') 'Server task runs under the wrong account.'
         Assert-PrivateAcl (Join-Path $serverRoot 'config/hub-token') $true
-        $httpClient.DefaultRequestHeaders.Authorization = $null
+        Add-Type -AssemblyName System.Net.Http
+        $httpHandler = New-Object Net.Http.HttpClientHandler
+        $httpHandler.UseProxy = $false
+        $httpClient = New-Object Net.Http.HttpClient($httpHandler)
         $unauthorized = $httpClient.GetAsync("$hubAddress/health").GetAwaiter().GetResult()
         Assert-InstallerTest ([int]$unauthorized.StatusCode -eq 401) 'Unauthenticated server access succeeded.'
         $unauthorized.Dispose(); $httpClient.Dispose(); $httpHandler.Dispose()
