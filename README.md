@@ -1,6 +1,6 @@
 # Codex Token Monitor — Go MCP
 
-[نصب توسط ایجنت](docs/AGENT_INSTALL.md) · [نصب تعاملی سرور](docs/SERVER.md) · [تنظیمات و رفع اشکال](docs/CONFIGURATION.md) · [دریافت نسخهٔ آماده](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.1)
+[نصب توسط ایجنت](docs/AGENT_INSTALL.md) · [نصب تعاملی سرور](docs/SERVER.md) · [تنظیمات و رفع اشکال](docs/CONFIGURATION.md) · [دریافت نسخهٔ آماده](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.2)
 
 مقایسهٔ مصرف یک اکانت کدکس روی چند کامپیوتر. روی هر دستگاه یک جمع‌کنندهٔ Go لاگ‌های محلی را می‌خواند؛ یک Hub مشترک آمار را جمع می‌کند و از طریق MCP گزارش می‌دهد. تعداد دستگاه‌ها محدود نیست و از گزارش‌های دریافتی شناسایی می‌شود. سرور رابط مدیریتی ندارد؛ وقتی از ایجنت گزارش بخواهید، ابزار یک **فایل HTML فارسی و مستقل** می‌سازد و فقط لینک آن را برمی‌گرداند.
 
@@ -27,15 +27,19 @@
 ```sh
 git clone https://github.com/AlirezaDadrass/codex-token-monitor.git
 cd codex-token-monitor
-git checkout v0.1.1
+git checkout v0.1.2
 sudo bash scripts/install-server.sh
 ```
 
 نصب‌کننده باینری همان نسخه را با بررسی checksum دریافت می‌کند و سرویس بومی می‌سازد. Go برای اجرای نسخهٔ آماده لازم نیست. برای جزئیات TLS، آدرس شبکه، نصب از باینری محلی، dry-run و نگهداری سرویس، [راهنمای سرور](docs/SERVER.md) را بخوانید.
 
+## نصب ویندوز بدون کامپایل
+
+اسکریپت [install-windows.ps1](scripts/install-windows.ps1) نسخهٔ آمادهٔ x64 یا ARM64 را دانلود و checksum را بررسی می‌کند. برای کلاینت اجرا کنید `./install-windows.ps1` و برای سرور، در PowerShell با دسترسی Administrator، `./install-windows.ps1 -Mode Server`. [راهنمای کامل ویندوز](docs/WINDOWS.md) شامل دریافت مستقیم اسکریپت، نصب آفلاین و روش غیرتعاملی ایجنت است.
+
 ## نصب سریع روی کامپیوترها
 
-فایل اجرایی سیستم خود را از [انتشار آماده](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.1) دریافت و checksum آن را بررسی کنید. سپس:
+فایل اجرایی سیستم خود را از [انتشار آماده](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.2) دریافت و checksum آن را بررسی کنید. سپس:
 
 ```sh
 token-monitor install

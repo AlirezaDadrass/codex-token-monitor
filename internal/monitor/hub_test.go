@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -225,6 +226,9 @@ func TestStdioMCPBinary(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 	bin := filepath.Join(t.TempDir(), "token-monitor")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
 	build := exec.CommandContext(ctx, "go", "build", "-o", bin, "../../cmd/token-monitor")
 	if b, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v %s", err, b)

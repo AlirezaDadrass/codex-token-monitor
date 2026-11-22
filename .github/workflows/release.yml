@@ -1,0 +1,45 @@
+name: Build and publish release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+  release:
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Validate release tag
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          VERSION=$(awk -F '"' '/const Version/ {print $2}' internal/monitor/version.go)
+          test "$TAG" = "v$VERSION"
+      - name: Build release packages on GitHub
+        env:
+          TAG: ${{ github.ref_name }}
+        run: bash scripts/build-release.sh "$TAG"
+      - name: Verify packages
+        run: cd dist && sha256sum --check checksums.txt
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          printf 'Prebuilt Linux, macOS, and Windows amd64/arm64 packages. No Go toolchain is needed on the destination.\n\nWindows installer: download install-windows.ps1 and run it with -Mode Client or -Mode Server.\n\nGuide: https://github.com/%s/blob/%s/docs/WINDOWS.md\n' "$GITHUB_REPOSITORY" "$TAG" > "$RUNNER_TEMP/release-notes.md"
+          gh release create "$TAG" --verify-tag --draft --title "$TAG — Windows installer and prebuilt binaries" --notes-file "$RUNNER_TEMP/release-notes.md"
+          gh release upload "$TAG" dist/token-monitor_"${TAG#v}"_*.tar.gz dist/token-monitor_"${TAG#v}"_*.zip dist/install-windows.ps1 dist/checksums.txt
+          gh release edit "$TAG" --draft=false --latest

@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call:
 permissions:
   contents: read
 jobs:
@@ -18,3 +19,31 @@ jobs:
       - run: go vet ./...
       - run: go build -trimpath -o bin/token-monitor ./cmd/token-monitor
       - run: bash -n scripts/install-server.sh scripts/build-release.sh
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+      - run: go vet ./...
+      - run: go build -trimpath -o bin/token-monitor.exe ./cmd/token-monitor
+      - name: Windows PowerShell 5.1 installer tests
+        shell: powershell
+        run: ./scripts/test-windows-installer.ps1 -BinaryPath "$PWD/bin/token-monitor.exe" -Integration
+      - name: PowerShell 7 installer tests
+        shell: pwsh
+        run: ./scripts/test-windows-installer.ps1 -BinaryPath "$PWD/bin/token-monitor.exe" -Integration
+      - name: Package Windows x64
+        shell: pwsh
+        run: ./scripts/build-windows-release.ps1 -Version v0.1.2 -Architecture amd64
+      - name: Package Windows ARM64
+        shell: pwsh
+        run: ./scripts/build-windows-release.ps1 -Version v0.1.2 -Architecture arm64
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-binaries
+          path: dist/*.zip
+          if-no-files-found: error

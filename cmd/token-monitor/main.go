@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"syscall"
@@ -174,7 +173,10 @@ func registerMCP(ctx context.Context, configPath string) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "codex", "mcp", "add", "token-monitor", "--", executable, "mcp", "--config", configPath)
+	cmd, err := codexRegistrationCommand(ctx, executable, configPath)
+	if err != nil {
+		return fmt.Errorf("configuration saved, but Codex registration failed: %w", err)
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2
+
+- Added a standalone PowerShell installer for Windows clients and servers, with verified prebuilt x64/ARM64 downloads and offline installation.
+- Windows server installation uses a startup task under LOCAL SERVICE with private ACLs; it does not require a Go toolchain.
+- Added native Windows installer integration checks and automatic GitHub release builds.
+- Fixed Windows Codex registration through npm-style codex.cmd launchers.
+
 ## 0.1.1
 
 - Removed the assumed device count from configuration, report metadata, MCP status, and the HTML report. New devices join automatically without a fixed maximum or minimum fleet size.

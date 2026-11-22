@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -42,7 +43,8 @@ func TestInitAsksNameAndCreatesPrivateConnectionToken(t *testing.T) {
 	if len(strings.TrimSpace(string(secret))) != 64 {
 		t.Fatal("connection token is not 256 bits")
 	}
-	if info, err := os.Stat(c.TokenFile); err != nil || info.Mode().Perm()&0077 != 0 {
+	// Windows uses ACLs; the native PowerShell installer tests verify those.
+	if info, err := os.Stat(c.TokenFile); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0) {
 		t.Fatal("token file is accessible to other users")
 	}
 	if err := run(context.Background(), []string{"init", "--config", configPath, "--name", "Another"}); err == nil {

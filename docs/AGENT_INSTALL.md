@@ -18,16 +18,20 @@
 
 توکن واقعی را بازگو نکن. آن را در command line، URL، git، فایل نمونه، shell history، screenshot یا خروجی نهایی نگذار. برای گرفتن توکن از محیطی استفاده کن که ورود secret را پشتیبانی می‌کند؛ اگر چنین امکانی نداری، از کاربر مسیر یک فایل محلی حاوی توکن را بگیر. فایل را برای فهمیدن مقدار توکن چاپ نکن.
 
+## نصب ویندوز
+
+روی ویندوز از [اسکریپت PowerShell آماده](WINDOWS.md) استفاده کن؛ روی سیستم مقصد Go نصب یا برنامه را کامپایل نکن. حالت پیش‌فرض Client است؛ فقط اگر کاربر همین میزبان را برای سرور انتخاب کرده، حالت Server را اجرا کن. فایل `install-windows.ps1` و ZIP هر دو در Release هستند. نام، آدرس و توکن را ابتدا از کاربر بگیر؛ توکن را با SecureString یا مسیر فایل خصوصی بده.
+
 ## ۲. فایل اجرایی را آماده کن
 
-روی سیستم مقصد، از انتشار [v0.1.1](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.1) فایل مطابق سیستم و CPU را دانلود کن و SHA-256 آن را با `checksums.txt` همان انتشار بررسی کن. باینری‌ها برای Linux/macOS/Windows و amd64/arm64 منتشر می‌شوند. فایل اجرایی را در یک مسیر پایدار قرار بده؛ MCP همان مسیر را بعداً اجرا می‌کند. از پوشهٔ موقت اجرا نکن.
+روی سیستم مقصد، از انتشار [v0.1.2](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.2) فایل مطابق سیستم و CPU را دانلود کن و SHA-256 آن را با `checksums.txt` همان انتشار بررسی کن. باینری‌ها برای Linux/macOS/Windows و amd64/arm64 منتشر می‌شوند. فایل اجرایی را در یک مسیر پایدار قرار بده؛ MCP همان مسیر را بعداً اجرا می‌کند. از پوشهٔ موقت اجرا نکن.
 
 اگر Go 1.26 یا جدیدتر روی میزبان نصب است، از سورس بساز:
 
 ```sh
 git clone https://github.com/AlirezaDadrass/codex-token-monitor.git
 cd codex-token-monitor
-git checkout v0.1.1
+git checkout v0.1.2
 go build -trimpath -o bin/token-monitor ./cmd/token-monitor
 ```
 

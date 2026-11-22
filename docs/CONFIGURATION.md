@@ -103,4 +103,4 @@ go build -trimpath -o bin/token-monitor ./cmd/token-monitor
 bash -n scripts/install-server.sh scripts/build-release.sh
 ```
 
-برای ساخت بسته‌های انتشار: `bash scripts/build-release.sh v0.1.1`. ساخت با ابزار بومی Go و بدون CGO انجام می‌شود. این پروژه برای توسعه/تست به سرویس پایگاه داده یا کانتینر نیاز ندارد.
+برای ساخت بسته‌های انتشار: `bash scripts/build-release.sh v0.1.2`. ساخت با ابزار بومی Go و بدون CGO انجام می‌شود. این پروژه برای توسعه/تست به سرویس پایگاه داده یا کانتینر نیاز ندارد.
