@@ -110,7 +110,7 @@ try {
         $clientConfig = Join-Path $clientRoot 'config/config.json'
         $profile = Get-Content -LiteralPath $clientConfig -Encoding UTF8 -Raw | ConvertFrom-Json
         Assert-InstallerTest ($profile.machine_name -eq 'رایانهٔ ویندوز') 'Unicode device name changed during installation.'
-        $registered = @(Get-Content -LiteralPath $env:TOKEN_MONITOR_TEST_REGISTRATION -Encoding UTF8 -Raw | ConvertFrom-Json)
+        $registered = Get-Content -LiteralPath $env:TOKEN_MONITOR_TEST_REGISTRATION -Encoding UTF8 -Raw | ConvertFrom-Json
         if ($registered -notcontains [IO.Path]::GetFullPath($clientConfig)) { Write-Output ($registered | ConvertTo-Json) }
         Assert-InstallerTest ($registered -contains [IO.Path]::GetFullPath($clientConfig)) 'Codex registration changed the config path.'
         Assert-PrivateAcl $profile.token_file $false
