@@ -38,10 +38,14 @@ jobs:
         run: ./scripts/test-windows-installer.ps1 -BinaryPath "$PWD/bin/token-monitor.exe" -Integration
       - name: Package Windows x64
         shell: pwsh
-        run: ./scripts/build-windows-release.ps1 -Version v0.1.2 -Architecture amd64
+        run: |
+          $version = 'v' + ((Get-Content internal/monitor/version.go -Raw) -split '"')[1]
+          ./scripts/build-windows-release.ps1 -Version $version -Architecture amd64
       - name: Package Windows ARM64
         shell: pwsh
-        run: ./scripts/build-windows-release.ps1 -Version v0.1.2 -Architecture arm64
+        run: |
+          $version = 'v' + ((Get-Content internal/monitor/version.go -Raw) -split '"')[1]
+          ./scripts/build-windows-release.ps1 -Version $version -Architecture arm64
       - uses: actions/upload-artifact@v7
         with:
           name: windows-binaries

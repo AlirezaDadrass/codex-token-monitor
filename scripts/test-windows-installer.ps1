@@ -25,7 +25,9 @@ function Assert-PrivateAcl([string]$Path, [bool]$AllowService) {
     }
 }
 
-$testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('monitor-windows-tests-' + [Guid]::NewGuid().ToString('N'))
+$testBase = [IO.Path]::GetTempPath()
+if ($Integration) { $testBase = $env:ProgramData }
+$testDirectory = Join-Path $testBase ('monitor-windows-tests-' + [Guid]::NewGuid().ToString('N'))
 $testTask = 'CodexTokenMonitorTest-' + [Guid]::NewGuid().ToString('N')
 $originalPath = $env:PATH
 $originalCodexHome = [Environment]::GetEnvironmentVariable('CODEX_HOME')
@@ -74,14 +76,21 @@ try {
         $serverRoot = Join-Path $testDirectory 'server'
         Install-WindowsMonitor -Mode Server -Version 'v0.1.2' -Architecture amd64 -Name 'مرکز تست' -PublicUrl $hubAddress -ListenAddress '127.0.0.1' -Port $testPort -Token $secureKey -InstallRoot $serverRoot -TaskName $testTask -ArchivePath $archive -ChecksumsPath $manifest -NonInteractive
         $serverInstalled = $true
+        $tokenBytes = [IO.File]::ReadAllBytes((Join-Path $serverRoot 'config/hub-token'))
+        Assert-InstallerTest (([Text.Encoding]::UTF8.GetString($tokenBytes)).Trim() -eq $fakeKey) 'The token changed in native stdin transmission.'
         $healthy = $false
+        $lastHealthError = ''
         for ($attempt = 0; $attempt -lt 20; $attempt++) {
             try {
                 $response = Invoke-WebRequest -UseBasicParsing -Uri "$hubAddress/health" -Headers @{ Authorization = 'Bearer ' + $fakeKey }
                 if ($response.StatusCode -eq 200) { $healthy = $true; break }
-            } catch { Start-Sleep -Milliseconds 500 }
+            } catch { $lastHealthError = $_.Exception.Message; Start-Sleep -Milliseconds 500 }
         }
-        Assert-InstallerTest $healthy 'The native server task did not pass authenticated health checks.'
+        if (-not $healthy) {
+            Write-Output (Get-ScheduledTaskInfo -TaskName $testTask | Out-String)
+            Write-Output (Get-Acl -LiteralPath (Join-Path $serverRoot 'config/hub-token') | Format-List | Out-String)
+        }
+        Assert-InstallerTest $healthy ('The native server task did not pass authenticated health checks: ' + $lastHealthError)
         $task = Get-ScheduledTask -TaskName $testTask
         $taskUser = $task.Principal.UserId
         if ($taskUser -ne 'S-1-5-19') { $taskUser = (New-Object Security.Principal.NTAccount($taskUser)).Translate([Security.Principal.SecurityIdentifier]).Value }

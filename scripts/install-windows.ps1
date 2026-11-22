@@ -83,7 +83,10 @@ function Invoke-MonitorBinary {
         if ($null -ne $Secret) {
             $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secret)
             $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
-            $process.StandardInput.WriteLine($plain)
+            $payload = (New-Object Text.UTF8Encoding($false)).GetBytes($plain + "`n")
+            $process.StandardInput.BaseStream.Write($payload, 0, $payload.Length)
+            $process.StandardInput.BaseStream.Flush()
+            [Array]::Clear($payload, 0, $payload.Length)
             $process.StandardInput.Close()
             $plain = $null
         }
