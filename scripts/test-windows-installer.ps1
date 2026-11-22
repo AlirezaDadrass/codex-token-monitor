@@ -98,9 +98,9 @@ try {
         # An npm-style codex.cmd launcher must receive Unicode/space-containing paths intact.
         $mockDirectory = Join-Path $testDirectory 'mock-codex'
         [void][IO.Directory]::CreateDirectory($mockDirectory)
-        $recorder = Join-Path $mockDirectory 'record.ps1'
-        [IO.File]::WriteAllText($recorder, '[IO.File]::WriteAllText($env:TOKEN_MONITOR_TEST_REGISTRATION, (ConvertTo-Json -InputObject @($args) -Compress), (New-Object Text.UTF8Encoding($false)))')
-        [IO.File]::WriteAllText((Join-Path $mockDirectory 'codex.cmd'), "@echo off`r`npowershell.exe -NoProfile -NonInteractive -File `"%~dp0record.ps1`" %*`r`nexit /b %ERRORLEVEL%`r`n")
+        & go build -o (Join-Path $mockDirectory 'recorder.exe') (Join-Path $PSScriptRoot 'testdata/record-arguments.go')
+        if ($LASTEXITCODE -ne 0) { throw 'Could not build the native argument recorder fixture.' }
+        [IO.File]::WriteAllText((Join-Path $mockDirectory 'codex.cmd'), "@echo off`r`n`"%~dp0recorder.exe`" %*`r`nexit /b %ERRORLEVEL%`r`n")
         $env:PATH = $mockDirectory + [IO.Path]::PathSeparator + $originalPath
         $env:CODEX_HOME = Join-Path $testDirectory 'isolated-codex'
         [void][IO.Directory]::CreateDirectory($env:CODEX_HOME)
@@ -111,7 +111,8 @@ try {
         $profile = Get-Content -LiteralPath $clientConfig -Encoding UTF8 -Raw | ConvertFrom-Json
         Assert-InstallerTest ($profile.machine_name -eq 'رایانهٔ ویندوز') 'Unicode device name changed during installation.'
         $registered = @(Get-Content -LiteralPath $env:TOKEN_MONITOR_TEST_REGISTRATION -Encoding UTF8 -Raw | ConvertFrom-Json)
-        Assert-InstallerTest ($registered -contains $clientConfig) 'Codex registration changed the config path.'
+        if ($registered -notcontains [IO.Path]::GetFullPath($clientConfig)) { Write-Output ($registered | ConvertTo-Json) }
+        Assert-InstallerTest ($registered -contains [IO.Path]::GetFullPath($clientConfig)) 'Codex registration changed the config path.'
         Assert-PrivateAcl $profile.token_file $false
         $oldIdentity = $profile.machine_id
         Install-WindowsMonitor -Mode Client -Version 'v0.1.2' -Architecture amd64 -InstallRoot $clientRoot -ArchivePath $archive -ChecksumsPath $manifest -NonInteractive
