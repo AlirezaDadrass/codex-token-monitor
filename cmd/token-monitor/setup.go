@@ -71,6 +71,9 @@ func setupConfig(ctx context.Context, o setupOptions, p *prompter) (monitor.Conf
 			}
 		}
 		fmt.Fprintf(p.output, "Using existing configuration for %s\n", c.MachineName)
+		if err := syncInstalledProfile(ctx, c, o, p.output); err != nil {
+			return c, err
+		}
 		return c, nil
 	} else if !os.IsNotExist(err) {
 		return monitor.Config{}, err
@@ -210,7 +213,22 @@ func setupConfig(ctx context.Context, o setupOptions, p *prompter) (monitor.Conf
 	if createdToken != "" {
 		fmt.Fprintf(p.output, "Saved hub token privately at %s (token value is not displayed)\n", c.TokenFile)
 	}
+	if err := syncInstalledProfile(ctx, c, o, p.output); err != nil {
+		return c, err
+	}
 	return c, nil
+}
+
+func syncInstalledProfile(ctx context.Context, c monitor.Config, o setupOptions, output io.Writer) error {
+	if !o.Install || o.SkipCheck || c.HubURL == "" {
+		return nil
+	}
+	s, err := monitor.Refresh(ctx, c)
+	if err != nil {
+		return fmt.Errorf("configuration saved, but the initial usage upload failed; installation is incomplete: %w", err)
+	}
+	fmt.Fprintf(output, "Initial usage uploaded for %s (%d retained events).\n", c.MachineName, len(s.Events))
+	return nil
 }
 
 func absoluteUserPath(path string) (string, error) {

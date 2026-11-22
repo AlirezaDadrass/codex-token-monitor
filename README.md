@@ -1,6 +1,6 @@
 # Codex Token Monitor — Go MCP
 
-[نصب توسط ایجنت](docs/AGENT_INSTALL.md) · [نصب تعاملی سرور](docs/SERVER.md) · [تنظیمات و رفع اشکال](docs/CONFIGURATION.md) · [دریافت نسخهٔ آماده](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.3)
+[نصب توسط ایجنت](docs/AGENT_INSTALL.md) · [نصب تعاملی سرور](docs/SERVER.md) · [تنظیمات و رفع اشکال](docs/CONFIGURATION.md) · [دریافت نسخهٔ آماده](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.4)
 
 مقایسهٔ مصرف یک اکانت کدکس روی چند کامپیوتر. روی هر دستگاه یک جمع‌کنندهٔ Go لاگ‌های محلی را می‌خواند؛ یک Hub مشترک آمار را جمع می‌کند و از طریق MCP گزارش می‌دهد. تعداد دستگاه‌ها محدود نیست و از گزارش‌های دریافتی شناسایی می‌شود. آدرس هاب را در مرورگر باز کنید و با توکن هاب وارد شوید؛ مصرف همهٔ دستگاه‌ها و سشن‌هایشان در یک گزارش دیده می‌شود. درخواست گزارش از ایجنت نیز فقط روی هاب یک **فایل HTML فارسی و مستقل** می‌سازد و لینک آن را برمی‌گرداند؛ گزارش محلی تولید نمی‌شود.
 
@@ -28,7 +28,7 @@
 ```sh
 git clone https://github.com/AlirezaDadrass/codex-token-monitor.git
 cd codex-token-monitor
-git checkout v0.1.3
+git checkout v0.1.4
 sudo bash scripts/install-server.sh
 ```
 
@@ -40,13 +40,13 @@ sudo bash scripts/install-server.sh
 
 ## نصب سریع روی کامپیوترها
 
-فایل اجرایی سیستم خود را از [انتشار آماده](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.3) دریافت و checksum آن را بررسی کنید. سپس:
+فایل اجرایی سیستم خود را از [انتشار آماده](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.4) دریافت و checksum آن را بررسی کنید. سپس:
 
 ```sh
 token-monitor install
 ```
 
-نصب، **نام این کامپیوتر، آدرس سرور و توکن اتصال** را می‌پرسد. اتصال با توکن بررسی و MCP در Codex ثبت می‌شود. به ایجنت می‌توانید فقط لینک ریپو را بدهید و بخواهید طبق [راهنمای نصب ایجنت](docs/AGENT_INSTALL.md) اطلاعات را از شما بگیرد و خودش نصب را کامل کند.
+نصب، **نام این کامپیوتر، آدرس سرور و توکن اتصال** را می‌پرسد. اتصال با توکن و اولین آپلود بررسی و MCP در Codex ثبت می‌شود؛ دستگاه همان موقع به هاب اضافه می‌شود. نصب‌کنندهٔ ویندوز یک جمع‌کنندهٔ کاربری هم اجرا می‌کند تا هنگام ورود کاربر به ویندوز، بدون بازبودن چت یا Codex، آمار خودکار ارسال شود. به ایجنت می‌توانید فقط لینک ریپو را بدهید و بخواهید طبق [راهنمای نصب ایجنت](docs/AGENT_INSTALL.md) اطلاعات را از شما بگیرد و خودش نصب را کامل کند.
 
 ## ساخت از سورس و اجرای محلی
 
@@ -137,7 +137,7 @@ APIها و MCP شبکه‌ای با `Authorization: Bearer ...` بررسی می�
 codex mcp add token-monitor -- /absolute/path/token-monitor mcp --config /absolute/path/config.json
 ```
 
-یا تنظیمات نمونهٔ [examples/codex-local.toml](examples/codex-local.toml) را با مسیرهای خود به فایل تنظیمات کدکس اضافه کنید. در حالت `mcp` جمع‌کننده در پس‌زمینه هم اجرا می‌شود. اگر همیشه یک Codex باز است، اجرای جداگانهٔ `watch` الزامی نیست؛ `watch` امکان همگام‌سازی مستقل از Codex را می‌دهد. اجرای هم‌زمان این دو نیز با قفل و snapshot جایگزین‌شونده، مصرف را دوباره جمع نمی‌کند.
+یا تنظیمات نمونهٔ [examples/codex-local.toml](examples/codex-local.toml) را با مسیرهای خود به فایل تنظیمات کدکس اضافه کنید. در حالت `mcp` جمع‌کننده در پس‌زمینه هم اجرا می‌شود. در نصب ویندوز، task کاربری همین کار را مستقل از Codex انجام می‌دهد. روی سیستم‌های دیگر، اگر همیشه یک Codex باز است، اجرای جداگانهٔ `watch` الزامی نیست؛ `watch` امکان همگام‌سازی مستقل از Codex را می‌دهد. اجرای هم‌زمان این دو نیز با قفل و snapshot جایگزین‌شونده، مصرف را دوباره جمع نمی‌کند.
 
 بعد از اتصال می‌توان به کدکس گفت:
 

@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Client', 'Server')][string]$Mode = 'Client',
-    [ValidatePattern('^v[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = 'v0.1.3',
+    [ValidatePattern('^v[0-9]+\.[0-9]+\.[0-9]+$')][string]$Version = 'v0.1.4',
     [ValidateSet('Auto', 'amd64', 'arm64')][string]$Architecture = 'Auto',
     [string]$Name,
     [string]$HubUrl,
@@ -135,6 +135,62 @@ function Assert-ArchiveChecksum([string]$Archive, [string]$Manifest, [string]$As
     }
 }
 
+function Get-CollectorTaskName([string]$MachineId) {
+    if ($MachineId -notmatch '^[a-f0-9]{32}$') { throw 'Invalid collector machine identity.' }
+    return 'CodexTokenMonitorCollector-' + $MachineId
+}
+
+function Register-ClientCollectorTask([string]$Executable, [string]$ConfigPath, [string]$InstallRoot, [string]$MachineId) {
+    $name = Get-CollectorTaskName $MachineId
+    $description = 'Codex Token Monitor collector | ' + [IO.Path]::GetFullPath($ConfigPath)
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $old = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+    $oldXml = $null
+    if ($old) {
+        $owner = $old.Principal.UserId
+        if ($owner -notmatch '^S-1-') { $owner = (New-Object Security.Principal.NTAccount($owner)).Translate([Security.Principal.SecurityIdentifier]).Value }
+        if ($old.Description -ne $description -or $owner -ne $identity.User.Value) {
+            throw 'The collector task belongs to another profile or user; it was not modified.'
+        }
+        $oldXml = Export-ScheduledTask -TaskName $name
+    }
+    # The native collector runs as this user while logged in, independently of
+    # Codex. A hidden PowerShell parent avoids opening a console and removes a
+    # stale inherited token override. No credential is in the task arguments.
+    $quotedExe = "'" + $Executable.Replace("'", "''") + "'"
+    $quotedConfig = "'" + $ConfigPath.Replace("'", "''") + "'"
+    $launch = '$ErrorActionPreference = ''Stop''; Remove-Item Env:TOKEN_MONITOR_HUB_TOKEN -ErrorAction SilentlyContinue; & ' + $quotedExe + ' watch --config ' + $quotedConfig + '; exit $LASTEXITCODE'
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($launch))
+    $powershell = Join-Path $env:SystemRoot 'System32/WindowsPowerShell/v1.0/powershell.exe'
+    $action = New-ScheduledTaskAction -Execute $powershell -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' + $encoded) -WorkingDirectory $InstallRoot
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $identity.Name
+    $principal = New-ScheduledTaskPrincipal -UserId $identity.User.Value -LogonType Interactive -RunLevel Limited
+    $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -StartWhenAvailable -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    try {
+        if ($old) { Stop-ScheduledTask -TaskName $name }
+        [void](Register-ScheduledTask -TaskName $name -Description $description -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force)
+        Start-ScheduledTask -TaskName $name
+        $running = $false
+        for ($attempt = 0; $attempt -lt 15; $attempt++) {
+            if ((Get-ScheduledTask -TaskName $name).State -eq 'Running') { $running = $true; break }
+            Start-Sleep -Seconds 1
+        }
+        if (-not $running) { throw "Automatic collector $name did not stay running." }
+    } catch {
+        $failure = $_
+        if ($oldXml) {
+            [void](Register-ScheduledTask -TaskName $name -Xml $oldXml -Force)
+            Start-ScheduledTask -TaskName $name
+        } else {
+            Stop-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+            Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
+        }
+        throw $failure
+    }
+    Write-Output "Automatic collector is running as the current user: $name"
+    Write-Output 'Usage sync continues while this Windows user is logged in, even when Codex is closed.'
+}
+
 function Install-VerifiedExecutable([string]$Archive, [string]$Destination) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [IO.Compression.ZipFile]::OpenRead($Archive)
@@ -158,7 +214,7 @@ function Install-VerifiedExecutable([string]$Archive, [string]$Destination) {
 function Install-WindowsMonitor {
     [CmdletBinding()]
     param(
-        [string]$Mode = 'Client', [string]$Version = 'v0.1.3', [string]$Architecture = 'Auto', [string]$Name, [string]$HubUrl,
+        [string]$Mode = 'Client', [string]$Version = 'v0.1.4', [string]$Architecture = 'Auto', [string]$Name, [string]$HubUrl,
         [Security.SecureString]$Token, [string]$TokenFile, [string]$InstallRoot,
         [string]$ListenAddress = '127.0.0.1', [int]$Port = 8787, [string]$PublicUrl, [string]$TlsCertificate,
         [string]$TlsKey, [string]$TaskName = 'CodexTokenMonitorHub', [string]$ArchivePath, [string]$ChecksumsPath,
@@ -291,6 +347,9 @@ function Install-WindowsMonitor {
             if (-not $running) { throw "Task $TaskName did not stay running. Inspect Task Scheduler before considering installation complete." }
             Write-Output "Server task registered as LOCAL SERVICE: $TaskName"
             Write-Output 'No firewall, execution-policy, or reverse-proxy settings were changed.'
+        } else {
+            $profile = Get-Content -LiteralPath $configPath -Encoding UTF8 -Raw | ConvertFrom-Json
+            Register-ClientCollectorTask -Executable $executable -ConfigPath $configPath -InstallRoot $InstallRoot -MachineId $profile.machine_id
         }
         Write-Output "Installed executable: $executable"
         Write-Output "Configuration: $configPath"

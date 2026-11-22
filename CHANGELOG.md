@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4
+
+- Connected client installs now send the initial usage snapshot before MCP registration, including devices without logs. A successful health check followed by an upload failure no longer reports installation success; the saved profile remains retryable.
+- Windows installation starts a collector task immediately and at the current user's logon. Usage continues to upload while that user is logged in, even with Codex closed, without administrator runtime privileges or credentials in task arguments.
+- Reinstallation preserves device identity and credentials and updates only the collector task owned by the same user and profile, restoring the previous task on failure.
+- Added native initial-upload checks and Windows integration coverage for automatic new-session uploads without a manual collect call or an active Codex process.
+
 ## 0.1.3
 
 - Added a token-login dashboard on the hub's root URL, using expiring HttpOnly sessions, logout, and the existing standalone Persian report design.

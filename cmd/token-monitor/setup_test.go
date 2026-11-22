@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -17,7 +19,7 @@ func setupTestOptions(t *testing.T) setupOptions {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("TOKEN_MONITOR_HUB_TOKEN", "")
-	return setupOptions{ConfigPath: filepath.Join(root, "config.json"), Account: "personal", DataDir: filepath.Join(root, "data"), Install: true}
+	return setupOptions{ConfigPath: filepath.Join(root, "config.json"), Account: "personal", DataDir: filepath.Join(root, "data"), CodexHome: filepath.Join(root, "isolated-codex"), Install: true}
 }
 
 func TestInstallerPromptsNameAddressAndSecretAndVerifiesHub(t *testing.T) {
@@ -60,6 +62,64 @@ func TestInstallerPromptsNameAddressAndSecretAndVerifiesHub(t *testing.T) {
 	}
 	if strings.Contains(string(b), secret) {
 		t.Fatal("secret was embedded in public configuration")
+	}
+	request, _ := http.NewRequest(http.MethodGet, server.URL+"/v1/report", nil)
+	request.Header.Set("Authorization", "Bearer "+secret)
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var report monitor.Report
+	if err := json.NewDecoder(response.Body).Decode(&report); err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK || report.ReportingMachines != 1 || report.Machines[0].ID != c.MachineID || report.Machines[0].Name != c.MachineName {
+		t.Fatalf("installation checked health but did not register its first snapshot: %+v", report)
+	}
+	// A retry replaces the initial snapshot without inventing a second device.
+	if _, err := setupConfig(context.Background(), o, newPrompter(strings.NewReader(""), &output)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestInstallFailsWhenHealthPassesButUploadIsRejected(t *testing.T) {
+	o := setupTestOptions(t)
+	o.Name, o.NonInteractive, o.TokenStdin = "New computer", true, true
+	secret := strings.Repeat("test-secret-", 4)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/health" {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"ok"}`))
+			return
+		}
+		http.Error(w, "account mismatch", http.StatusBadRequest)
+	}))
+	defer server.Close()
+	o.HubURL = server.URL
+	var output bytes.Buffer
+	c, err := setupConfig(context.Background(), o, newPrompter(strings.NewReader(secret+"\n"), &output))
+	if err == nil || !strings.Contains(err.Error(), "initial usage upload failed") || !strings.Contains(err.Error(), "400") {
+		t.Fatalf("reported success without an initial snapshot: %v", err)
+	}
+	if _, err := monitor.LoadConfig(o.ConfigPath); err != nil {
+		t.Fatal("retryable installation lost its saved profile")
+	}
+	if _, err := os.Stat(c.TokenFile); err != nil {
+		t.Fatal("retryable installation lost its private token")
+	}
+	if strings.Contains(output.String(), secret) || strings.Contains(err.Error(), secret) {
+		t.Fatal("installation disclosed its token")
+	}
+}
+
+func TestExplicitOfflineInstallDoesNotUpload(t *testing.T) {
+	o := setupTestOptions(t)
+	o.Name, o.NonInteractive, o.TokenStdin, o.SkipCheck = "Offline computer", true, true, true
+	o.HubURL = "http://127.0.0.1:1"
+	c, err := setupConfig(context.Background(), o, newPrompter(strings.NewReader(strings.Repeat("offline-secret-", 4)+"\n"), &bytes.Buffer{}))
+	if err != nil || c.MachineID == "" {
+		t.Fatalf("explicit offline install tried to connect: %v", err)
 	}
 }
 

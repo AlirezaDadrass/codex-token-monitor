@@ -1,20 +1,20 @@
 # نصب آماده روی ویندوز
 
-برای نصب، Go، Git، Visual Studio یا منابع کامپایل لازم نیست. بسته‌های Windows x64 و ARM64 در [انتشار آمادهٔ ۰٫۱٫۳](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.3) هستند. اسکریپت معماری را تشخیص می‌دهد، ZIP همان نسخه را می‌گیرد و SHA-256 را پیش از استخراج بررسی می‌کند. کلید ورود OpenAI لازم نیست؛ فقط توکن مرکز خودتان را وارد کنید.
+برای نصب، Go، Git، Visual Studio یا منابع کامپایل لازم نیست. بسته‌های Windows x64 و ARM64 در [انتشار آمادهٔ ۰٫۱٫۴](https://github.com/AlirezaDadrass/codex-token-monitor/releases/tag/v0.1.4) هستند. اسکریپت معماری را تشخیص می‌دهد، ZIP همان نسخه را می‌گیرد و SHA-256 را پیش از استخراج بررسی می‌کند. کلید ورود OpenAI لازم نیست؛ فقط توکن مرکز خودتان را وارد کنید.
 
 ## کامپیوتر شخصی / نصب MCP
 
 فایل مستقل `install-windows.ps1` را از همان انتشار دریافت کنید. در PowerShell:
 
 ```powershell
-Invoke-WebRequest 'https://github.com/AlirezaDadrass/codex-token-monitor/releases/download/v0.1.3/install-windows.ps1' -OutFile '.\install-windows.ps1'
+Invoke-WebRequest 'https://github.com/AlirezaDadrass/codex-token-monitor/releases/download/v0.1.4/install-windows.ps1' -OutFile '.\install-windows.ps1'
 Unblock-File '.\install-windows.ps1'
 powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File '.\install-windows.ps1'
 ```
 
 این اجرای RemoteSigned فقط به فرایند فوق مربوط است؛ تنظیمات دائمی ExecutionPolicy تغییر نمی‌کند و Group Policy سازمان همچنان اعمال می‌شود. پس از بررسی فایل، آن را اجرا کنید.
 
-نصب‌کننده نام کامپیوتر، آدرس سرور و توکن را می‌پرسد. ورود توکن مخفی است. قبل از ثبت MCP در Codex، اتصال بررسی می‌شود. Codex CLI باید از قبل در PATH باشد؛ خود مانیتور به Go یا Node برای اجرا نیاز ندارد. نام دستگاه باید یکتا باشد؛ تعداد دستگاه‌ها محدود نیست.
+نصب‌کننده نام کامپیوتر، آدرس سرور و توکن را می‌پرسد. ورود توکن مخفی است. قبل از ثبت MCP در Codex، اتصال و اولین ارسال آمار بررسی می‌شوند؛ دستگاه حتی بدون مصرف قبلی در هاب دیده می‌شود. خطای ارسال به‌عنوان نصب موفق اعلام نمی‌شود. Codex CLI باید از قبل در PATH باشد؛ خود مانیتور به Go یا Node برای اجرا نیاز ندارد. نام دستگاه باید یکتا باشد؛ تعداد دستگاه‌ها محدود نیست.
 
 اجرای غیرتعاملی برای ایجنت، با فایل خصوصی توکن:
 
@@ -24,9 +24,19 @@ powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File '.\install-windows
   -TokenFile 'C:\private\hub-token'
 ```
 
-یا `-Token (Read-Host 'Hub token' -AsSecureString)` بدهید؛ مقدار واقعی توکن را در متن دستور ننویسید. فایل ورودی توکن داخل پوشهٔ خصوصی نصب کپی می‌شود. نصب مجدد بدون ورودیِ کلید، نام و شناسه و اتصال قبلی را حفظ می‌کند. باینری در پوشهٔ نسخه‌دار قرار می‌گیرد تا نسخهٔ در حال اجرای Codex بازنویسی نشود؛ اتصال MCP را برای استفاده از نسخهٔ جدید تازه‌سازی کنید.
+یا `-Token (Read-Host 'Hub token' -AsSecureString)` بدهید؛ مقدار واقعی توکن را در متن دستور ننویسید. فایل ورودی توکن داخل پوشهٔ خصوصی نصب کپی می‌شود. نصب مجدد بدون ورودیِ کلید، نام و شناسه و اتصال قبلی را حفظ می‌کند و task جمع‌کننده را به نسخهٔ جدید وصل می‌کند. باینری در پوشهٔ نسخه‌دار قرار می‌گیرد تا نسخهٔ در حال اجرای Codex بازنویسی نشود؛ اتصال MCP را برای استفاده از نسخهٔ جدید تازه‌سازی کنید.
 
-مسیر پیش‌فرض کلاینت: `%LOCALAPPDATA%\CodexTokenMonitor`. باینری زیر `bin\v0.1.3` و تنظیمات زیر `config\config.json` است. اسکریپت فقط همین پوشه را برای کاربر، SYSTEM و Administrators خصوصی می‌کند؛ PATH سیستم و فایروال را تغییر نمی‌دهد.
+از نسخهٔ ۰٫۱٫۴، جمع‌کنندهٔ خودکار با task کاربری `CodexTokenMonitorCollector-<machine_id>` ثبت و همان لحظه اجرا می‌شود. این task با ورود همان کاربر به ویندوز دوباره شروع می‌شود و با دسترسی معمولی او، بدون بازبودن Codex یا چت، هر ۶۰ ثانیه آمار تازه را می‌فرستد. هنگام خروج کاربر از ویندوز یا خاموشی، جمع‌آوری اجرا نمی‌شود؛ پس از ورود بعدی ادامه می‌یابد. خطای شبکه باعث از بین رفتن کش نمی‌شود و جمع‌کننده دوباره تلاش می‌کند.
+
+Task توکن را در آرگومان ندارد و فقط پروفایل همان کاربر را می‌خواند؛ اجرای native Go زیر یک PowerShell مخفی است تا پنجرهٔ کنسول باز نماند. پردازش MCP و task می‌توانند هم‌زمان فعال باشند؛ قفل و snapshot جایگزین‌شونده مانع دوباره‌شماری می‌شوند. نصب دوباره فقط task مربوط به همین پروفایل و کاربر را به‌روز می‌کند و task دیگری را بازنویسی نمی‌کند. اگر Task Scheduler سازمان اجازهٔ ساخت task ندهد، نصب ناقص اعلام می‌شود.
+
+```powershell
+Get-ScheduledTask -TaskName 'CodexTokenMonitorCollector-*'
+```
+
+برای ارتقای نصب فعلی، اسکریپت انتشار جدید را دوباره در همان حساب ویندوز اجرا کنید؛ نام، شناسه و توکن قبلی حفظ می‌شوند و نیازی به اجرای دستی `collect` نیست.
+
+مسیر پیش‌فرض کلاینت: `%LOCALAPPDATA%\CodexTokenMonitor`. باینری زیر `bin\v0.1.4` و تنظیمات زیر `config\config.json` است. اسکریپت فقط همین پوشه را برای کاربر، SYSTEM و Administrators خصوصی می‌کند؛ PATH سیستم و فایروال را تغییر نمی‌دهد.
 
 ## سرور ویندوز، بدون کامپایل
 
@@ -65,7 +75,7 @@ ZIP و `checksums.txt` همان انتشار را روی کامپیوتر دیگ
 
 ```powershell
 .\install-windows.ps1 -Mode Client `
-  -ArchivePath '.\token-monitor_0.1.3_windows_amd64.zip' `
+  -ArchivePath '.\token-monitor_0.1.4_windows_amd64.zip' `
   -ChecksumsPath '.\checksums.txt'
 ```
 
@@ -80,4 +90,4 @@ ZIP و `checksums.txt` همان انتشار را روی کامپیوتر دیگ
 
 ## بیلدهای GitHub
 
-با ثبت تگ نسخه، workflow انتشار تست‌ها را اجرا می‌کند، هر شش باینری Linux/macOS/Windows را روی منابع GitHub می‌سازد و ZIP/TAR، اسکریپت مستقل و `checksums.txt` را در Release می‌گذارد. CI ویندوز نیز `.exe` را بومی می‌سازد و PowerShell 5.1 و 7، نصب کلاینت، ثبت با `codex.cmd`، ACL توکن، اجرای سرور با LOCAL SERVICE، احراز هویت و گزارش HTML را در محیط جدا آزمایش می‌کند.
+با ثبت تگ نسخه، workflow انتشار تست‌ها را اجرا می‌کند، هر شش باینری Linux/macOS/Windows را روی منابع GitHub می‌سازد و ZIP/TAR، اسکریپت مستقل و `checksums.txt` را در Release می‌گذارد. CI ویندوز نیز `.exe` را بومی می‌سازد و PowerShell 5.1 و 7، نصب کلاینت، ثبت با `codex.cmd`، اولین آپلود و ارسال خودکار یک سشن تازه بدون Codex، ACL توکن، اجرای سرور با LOCAL SERVICE، احراز هویت و گزارش HTML را در محیط جدا آزمایش می‌کند.

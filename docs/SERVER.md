@@ -9,7 +9,7 @@
 ```sh
 git clone https://github.com/AlirezaDadrass/codex-token-monitor.git
 cd codex-token-monitor
-git checkout v0.1.3
+git checkout v0.1.4
 sudo bash scripts/install-server.sh
 ```
 
